@@ -27,6 +27,10 @@ typedef unsigned short U16;
 #define TIMER_CTRL_ADDR        (0xFF07) //TAC timer control
 #define LCD_CTRL_REG           (0xFF40) //LCDC
 #define 	BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag
+#define 	BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag
+#define 	BG_WIN_ON_FALG         BIT(5)   //window on Flag
+#define 	BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
+
 #define LCD_Y_COORD_REG        (0xFF44) //LY lcd control y coordinate
 #define BG_PALETTE_DATA        (0xFF47) //BGP
 
@@ -106,6 +110,7 @@ union HL
 class U8DATA
 {
 public:
+	static U16 *pc;
 	U8  value;
 	U16 *access_addr;
 	U8 _hang;
@@ -122,10 +127,35 @@ public:
 	}
 	operator U8()
 	{
-		if ((0xFF00 <= *this->access_addr) && (*this->access_addr < 0xFF80))
+		switch (*this->access_addr)
 		{
-			//printf("cast operator_ @ %04X\n", *access_addr);
-			//printf("value = %04X\n", this->value);
+		//case 0xFF00:
+		case 0xFF70:
+		case 0xFF01:
+		case 0xFF02:
+		case 0xFF04:
+		case 0xFF05:
+		case 0xFF06:
+		case 0xFF07:
+		//case 0xFF0F:
+		case 0xFF40:
+		case 0xFF41:
+		case 0xFF42:
+		case 0xFF43:
+		case 0xFF45:
+		case 0xFF46:
+		case 0xFF47:
+		case 0xFF48:
+		case 0xFF49:
+		case 0xFF4A:
+		case 0xFF4B:
+		case 0xFE00:
+		case 0xFE01:
+		case 0xFE02:
+		case 0xFE03:
+		//case 0xFFFF:
+			printf("pc= %04X ,cast operator @ %04X\n", *pc, *access_addr);
+			break;
 		}
 		////printf("cast operator @ %04X\n", *access_addr);
 		if (*access_addr == 0xFF44)
@@ -173,20 +203,71 @@ public:
 	U8* operator &()
 	{
 		//printf("get address operator @ %04X\n" ,*access_addr);
-		if ((0xFF00 <= *this->access_addr) && (*this->access_addr < 0xFF80))
+		switch (*this->access_addr) 
 		{
-			//printf("get address operator_ @ %04X\n", *access_addr);
-			//printf("value = %04X\n", this->value);
+		//case 0xFF00:
+		case 0xFF70:
+		case 0xFF01:
+		case 0xFF02:
+		case 0xFF04:
+		case 0xFF05:
+		case 0xFF06:
+		case 0xFF07:
+		//case 0xFF0F:
+		case 0xFF40:
+		case 0xFF41:
+		case 0xFF42:
+		case 0xFF43:
+		case 0xFF45:
+		case 0xFF46:
+		case 0xFF47:
+		case 0xFF48:
+		case 0xFF49:
+		case 0xFF4A:
+		case 0xFF4B:
+		case 0xFE00:
+		case 0xFE01:
+		case 0xFE02:
+		case 0xFE03:
+		//case 0xFFFF:
+				printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
+				break;
 		}
 		return &this->value;
 	}
 	U8DATA &operator=(U8 val)
 	{
 		U8 _hang = true;
-		if((0xFF00 <= *this->access_addr) && (*this->access_addr < 0xFF80))
+		switch (*this->access_addr)
 		{
-			//printf("assign operator_ @ %04X\n", *access_addr);
-			//printf("value = %04X\n", this->value);
+		//case 0xFF00:
+		case 0xFF70:
+		case 0xFF01:
+		case 0xFF02:
+		case 0xFF04:
+		case 0xFF05:
+		case 0xFF06:
+		case 0xFF07:
+		//case 0xFF0F:
+		case 0xFF40:
+		case 0xFF41:
+		case 0xFF42:
+		case 0xFF43:
+		case 0xFF45:
+		case 0xFF46:
+		case 0xFF47:
+		case 0xFF48:
+		case 0xFF49:
+		case 0xFF4A:
+		case 0xFF4B:
+		case 0xFE00:
+		case 0xFE01:
+		case 0xFE02:
+		case 0xFE03:
+		//case 0xFFFF:
+			printf("pc= %04X ,assign operator @ %04X\n", *pc, *access_addr);
+
+			break;
 		}
 		if (*access_addr == 0xFF00)
 		{
@@ -201,7 +282,7 @@ public:
 		return (*this);
 	}
 };
-
+U16 *U8DATA::pc;
 
 
 class DEBUG_MEM
@@ -230,20 +311,77 @@ class DMGZ80CPU
 private:
 
 	//U8 memory[MEMORY_SIZE];
+	//register
 	AF af;
 	BC bc;
 	DE de;
 	HL hl;
-	U16 pc, sp;
+	U16 sp;
 	U16 stack[16];
 	U8 ime;                            //interrupt master enable
-	U8 halt_state;
-	void* tile_buf_ptr;
-	SYSTEMTIME begin_time;
-	SYSTEMTIME end_time;
+
+	//emulator flag
+	U8           halt_state;
+	void*        tile_buf_ptr;
+	SYSTEMTIME   begin_time;
+	SYSTEMTIME   end_time;
+	U8           refresh_lcd;
 	unsigned int cpu_cycles;
 
 public:
+	U16 pc;
+	DMGZ80CPU()
+	{
+		U8DATA::pc = &this->pc;
+		//boot rom
+		sp = STACK_BEGIN_ADDR;
+		pc = 0x0;
+		af.all = 0x0000;
+		bc.all = 0x0000;
+		de.all = 0x0000;
+		hl.all = 0x0000;
+		ime = TRUE;
+
+		tile_buf_ptr = malloc(imagesize(0,0,8,8));
+		halt_state = FALSE;
+		cpu_cycles = 0;
+		refresh_lcd = FALSE;
+
+		//load video ram		0x8000 ~ 0x8270
+		//sp = 0xCFF9;
+		//pc = 0x27C3;
+		//af.all = 0x09A0;
+		//bc.all = 0x0000;
+		//de.all = 0x0369;
+		//hl.all = 0x0369;
+
+		//main program start
+		sp = STACK_BEGIN_ADDR;
+		pc = 0x150;
+		af.all = 0x01B0;
+		bc.all = 0x0013;
+		de.all = 0x00D8;
+		hl.all = 0x014D;
+
+		//quick debug from
+		//sp = 0xCFFF;
+		//pc = 0x28A;
+		//af.all = 0x00C0;
+		//bc.all = 0x0000;
+		//de.all = 0x00D8;
+		//hl.all = 0xFDFF;
+
+		//check point
+		//sp = 0xCFFF;
+		//pc = 0x2B8;
+		//af.all = 0x8080;
+		//bc.all = 0x0000;
+		//de.all = 0x00D8;
+		//hl.all = 0x97FF;
+		
+		//clear memory
+		memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
+	}
 	DEBUG_MEM memory;
 	inline	void printREG() 
 	{
@@ -369,59 +507,6 @@ public:
 
 	}
 
-	void displayControl()
-	{
-		buildBackground();
-	}
-	DMGZ80CPU()
-	{
-		//boot rom
-		sp = STACK_BEGIN_ADDR;
-		pc = 0x0;
-		af.all = 0x0000;
-		bc.all = 0x0000;
-		de.all = 0x0000;
-		hl.all = 0x0000;
-		ime = TRUE;
-		tile_buf_ptr = malloc(imagesize(0,0,8,8));
-		halt_state = FALSE;
-		cpu_cycles = 0;
-
-		//load video ram		0x8000 ~ 0x8270
-		//sp = 0xCFF9;
-		//pc = 0x27C3;
-		//af.all = 0x09A0;
-		//bc.all = 0x0000;
-		//de.all = 0x0369;
-		//hl.all = 0x0369;
-
-		//main program start
-		sp = STACK_BEGIN_ADDR;
-		pc = 0x150;
-		af.all = 0x01B0;
-		bc.all = 0x0013;
-		de.all = 0x00D8;
-		hl.all = 0x014D;
-
-		//quick debug from
-		//sp = 0xCFFF;
-		//pc = 0x28A;
-		//af.all = 0x00C0;
-		//bc.all = 0x0000;
-		//de.all = 0x00D8;
-		//hl.all = 0xFDFF;
-
-		//check point
-		//sp = 0xCFFF;
-		//pc = 0x2B8;
-		//af.all = 0x8080;
-		//bc.all = 0x0000;
-		//de.all = 0x00D8;
-		//hl.all = 0x97FF;
-		
-		//clear memory
-		memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
-	}
 	inline int paletteCodeToColor(U8 palette_color_code)
 	{
 		U8  color_code;
@@ -497,6 +582,7 @@ public:
 	{
 		int x_pos = 0, y_pos = 0;
 		int video_ram_offset = 0;
+		int bg_char_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
 		U8 _break = false;
 		U8 sixteen_byte[16];
 		U16 dot_data_ofst;
@@ -509,7 +595,7 @@ public:
 				//{
 				//	sixteen_byte[i] = memory[VIDEO_RAM_BASE + video_ram_offset + i];
 				//}
-				buildTile(y_pos, x_pos, VIDEO_RAM_BASE + video_ram_offset);
+				buildTile(y_pos, x_pos, bg_char_data_ofst + video_ram_offset);
 
 
 				video_ram_offset += 16;
@@ -575,7 +661,14 @@ public:
 		//vertical blanking interupt
 		if (memory[LCD_Y_COORD_REG] == 0) 
 		{
+			//wake from halt_state
+			halt_state = FALSE;
+			//set int flag
 			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
+			//trigger refresh lcd
+			if((cpu_cycles & 0x1) == 0)
+				this->refresh_lcd = TRUE;
+
 			if (ime && (memory[INT_SWITCH] | INT_FLAG_VERT_BLANKING))
 			{
 				ime = TRUE;
@@ -587,6 +680,16 @@ public:
 
 		
 	}
+	void refreshLCD() 
+	{
+		GetSystemTime(&begin_time);
+		buildAllTileData();
+		GetSystemTime(&end_time);
+		printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
+		printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
+		buildBackground();
+	}
+
 	void run()
 	{
 		U8    opcode, xx;
@@ -597,19 +700,24 @@ public:
 		U8    bhere = 1;
 		U8    ly = memory[LCD_Y_COORD_REG];
 		U8    _debug = true;
-		GetSystemTime(&begin_time);
 
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
 			cpu_cycles++;
 			update_lcd_y_coord();
-			//check_interrupt();
+			check_interrupt();
 
+			if ((this->refresh_lcd == TRUE) && (pc == 0x2F0)) 
+			{
+				refresh_lcd = FALSE;
+				refreshLCD();
+			}
+
+			//
 			if (halt_state == TRUE) 
 			{
-				//check interrupt flag
-				//isr();
+				//do nothing
 			}
 			else
 			{
@@ -1325,15 +1433,17 @@ public:
 					//DI disable interrupt
 				case 0xF3:
 					pc += 1;
+					//printf("pc = 0x%X ", pc);
 					ime = false;
-					//printf("DI\n");
+					printf("DI\n");
 					break;
 
 					//EI enable interrupt
 				case 0xFB:
+					//printf("pc = 0x%X ", pc);
 					pc += 1;
 					ime = true;
-					//printf("EI\n");
+					printf("EI\n");
 					break;
 
 					//halt
@@ -1342,21 +1452,6 @@ public:
 				case 0x76:
 					halt_state = TRUE;
 					pc += 1;
-					//printf("halt\n");
-
-					GetSystemTime(&end_time);
-
-					printf("cpu cycle : %d\n", cpu_cycles);
-					printf("%d %d\n", begin_time.wSecond, begin_time.wMilliseconds);
-					printf("%d %d\n", end_time.wSecond, end_time.wMilliseconds);
-
-					buildAllTileData();
-					GetSystemTime(&begin_time);
-					buildBackground();
-					GetSystemTime(&end_time);
-					printf("buildBackground begin %d %d\n", begin_time.wSecond, begin_time.wMilliseconds);
-					printf("buildBackground end %d %d\n", end_time.wSecond, end_time.wMilliseconds);
-					//while (_debug);
 					break;
 
 					//increment A B..L (HL) by 1 		
@@ -1589,12 +1684,12 @@ public:
 					sp += 2;
 					//printf("RET pc = %04X\n", pc);
 					//auto disable ime
-					this->ime = 1;
+					this->ime = 0;
 					break;
 
 					//RETI	  
 				case 0xD9:
-					//printf("RETI ?!\r\n");
+					//printf("RETI \r\n");
 					pc = (memory[sp + 1] << 8) | memory[sp];
 					sp += 2;
 					//auto enable ime
