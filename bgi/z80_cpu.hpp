@@ -29,10 +29,17 @@ typedef unsigned short U16;
 #define 	BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag
 #define LCD_Y_COORD_REG        (0xFF44) //LY lcd control y coordinate
 #define BG_PALETTE_DATA        (0xFF47) //BGP
-#define INT_FLAGS_ADDR         (0xFF0F)
+
+#define INT_FLAGS         (0xFF0F)
+#define 	INT_FLAG_VERT_BLANKING BIT(4)
+#define 	INT_FLAG_LCDC          BIT(3)
+#define 	INT_FLAG_TIMER         BIT(2)
+#define 	INT_FLAG_SERIEAL_TRANS BIT(1)
+#define 	INT_FLAG_P10_P13       BIT(0)
+
 #define HIGH_WORK_RAM_BASE     (0xFF80)
 #define STACK_BEGIN_ADDR       (0xFFFE)
-#define INT_SWITCH_BASE        (0xFFFF)
+#define INT_SWITCH             (0xFFFF)
 
 #define MEMORY_SIZE            (65536)
 
@@ -42,6 +49,14 @@ typedef unsigned short U16;
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BUFFER_X       (256)
 #define BG_TILE_BUFFER_Y       (0)
+
+
+#define ISR_VERTICAL_BLANKING  0x40
+#define ISR_LCDC               0x48
+#define ISR_TIMER              0x50
+#define ISR_SERIEAL_TRANS_CPL  0x58
+#define ISR_P10_P10_INPUT      0x60
+
 
 union AF
 {
@@ -367,7 +382,7 @@ public:
 		bc.all = 0x0000;
 		de.all = 0x0000;
 		hl.all = 0x0000;
-		
+		ime = TRUE;
 		tile_buf_ptr = malloc(imagesize(0,0,8,8));
 		halt_state = FALSE;
 		cpu_cycles = 0;
@@ -556,8 +571,21 @@ public:
 		//memory[INT_FLAGS_ADDR];
 		//memory[INT_SWITCH_BASE];
 
+		//not need to clear int flag, programmer would clear flag before using it
 		//vertical blanking interupt
-		if(memory[LCD_Y_COORD_REG] > )
+		if (memory[LCD_Y_COORD_REG] == 0) 
+		{
+			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
+			if (ime && (memory[INT_SWITCH] | INT_FLAG_VERT_BLANKING))
+			{
+				ime = TRUE;
+				memory[--sp] = pc >> 8;
+				memory[--sp] = pc & 0xFF;
+				pc = ISR_VERTICAL_BLANKING;
+			}
+		}
+
+		
 	}
 	void run()
 	{
@@ -576,6 +604,7 @@ public:
 		{
 			cpu_cycles++;
 			update_lcd_y_coord();
+			//check_interrupt();
 
 			if (halt_state == TRUE) 
 			{
