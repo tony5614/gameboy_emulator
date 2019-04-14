@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
 {
 
 
-	initwindow(RESOLUTION_X * 2 + 2 * SCREEN_OFFSET + DEBUG_WINDOW_WIDTH, RESOLUTION_Y * 2 + 2 * SCREEN_OFFSET, "gameboy emulator");
+	initwindow(LCD_WIDTH * 2 + 2 * SCREEN_OFFSET + DEBUG_WINDOW_WIDTH, LCD_HEIGHT * 2 + 2 * SCREEN_OFFSET, "gameboy emulator");
 
 
 	//int color;

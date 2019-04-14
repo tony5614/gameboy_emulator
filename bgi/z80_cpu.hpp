@@ -29,7 +29,8 @@ typedef unsigned short U16;
 #define 	BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
 #define 	BG_WIN_ON_FALG         BIT(5)   //window on Flag
 #define 	BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
-
+#define SCY                    (0xFF42) //lcd scroll y
+#define SCX                    (0xFF43) //lcd scroll x
 #define LCD_Y_COORD_REG        (0xFF44) //LY lcd control y coordinate
 #define BG_PALETTE_DATA        (0xFF47) //BGP
 
@@ -52,8 +53,11 @@ typedef unsigned short U16;
 #define MEMORY_SIZE            (65536)
 
 #define SCREEN_OFFSET          (10)
-#define RESOLUTION_X           (160)
-#define RESOLUTION_Y           (144)
+#define LCD_WIDTH              (160)
+#define LCD_HEIGHT             (144)
+#define VIEWPORT_X             (300)
+#define VIEWPORT_Y             (300)
+
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BGI_BUFFER_X   (256)
 #define BG_TILE_BGI_BUFFER_Y   (0)
@@ -361,6 +365,7 @@ private:
 	//emulator flag
 	U8               halt_state;
 	void*            tile_buf_ptr;
+	void*            viewport_buf_ptr;
 	SYSTEMTIME       begin_time;
 	SYSTEMTIME       end_time;
 	U8               refresh_lcd;
@@ -386,7 +391,8 @@ public:
 		hl.all = 0x0000;
 		ime = TRUE;
 
-		tile_buf_ptr = malloc(imagesize(0,0,8,8));
+		tile_buf_ptr      = malloc(imagesize(0,0,8,8));
+		viewport_buf_ptr  = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
 		halt_state = FALSE;
 		cpu_cycles = 0;
 		refresh_lcd = FALSE;
@@ -712,7 +718,7 @@ public:
 				memory[LCD_Y_COORD_REG] = (U8)0x0;
 		}
 	}
-	void check_interrupt() 
+	void check_interrupt_and_dispatch_isr() 
 	{
 		//
 		//memory[INT_FLAGS_ADDR];
@@ -726,8 +732,8 @@ public:
 			halt_state = FALSE;
 			//set int flag
 			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
-			//trigger refresh lcd
-			if((cpu_cycles & 0x1) == 0)
+			//trigger refresh lcd, only one time
+			if((cpu_cycles & 0x1FF) == 0)
 				this->refresh_lcd = TRUE;
 
 			if (ime && (memory[INT_SWITCH] | INT_FLAG_VERT_BLANKING))
@@ -736,6 +742,8 @@ public:
 				memory[--sp] = pc >> 8;
 				memory[--sp] = pc & 0xFF;
 				pc = ISR_VERTICAL_BLANKING;
+				//clear flag if the interrupt is served by isr
+				memory[INT_SWITCH] = memory[INT_SWITCH] & (~INT_FLAG_VERT_BLANKING);
 			}
 		}
 
@@ -743,16 +751,18 @@ public:
 	}
 	void refreshLCD() 
 	{
-		GetSystemTime(&begin_time);
-		if (tile_data_built == FALSE) 
-		{
-			//buildAllTileData();
-			tile_data_built = TRUE;
-		}
+
 		GetSystemTime(&end_time);
 		printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
 		printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
 		buildBackground();
+
+
+		//viewport
+		int scy = memory[SCY];
+		int scx = memory[SCX];
+		getimage(scx, scy, scx + LCD_WIDTH, scy + LCD_HEIGHT, viewport_buf_ptr);
+		putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 	}
 
 	void run()
@@ -770,8 +780,9 @@ public:
 		while (TRUE)
 		{
 			cpu_cycles++;
+
 			update_lcd_y_coord();
-			check_interrupt();
+			check_interrupt_and_dispatch_isr();
 
 			if ((this->refresh_lcd == TRUE) && (pc == 0x2F0)) 
 			{
@@ -807,7 +818,10 @@ public:
 				//	buildBackground();
 				//	getchar();
 				//}
-
+				
+				//U8 _hang = TRUE;
+				//if (this->pc == 0x2ED)
+				//	while (_hang);
 				printREG();
 				//printf("ROM\n");
 				//printf("F\n");
@@ -1389,7 +1403,7 @@ public:
 				case 0xA5:
 				case 0xA6:
 				case 0xA7:
-					af.a &= (*idxToRegr_HL(opcode & 0x7) > af.a);
+					af.a &= (*idxToRegr_HL(opcode & 0x7));
 					af.f_c = 0;
 					af.f_h = 1;
 					af.f_n = 0;
@@ -1950,7 +1964,7 @@ U8DATA &U8DATA::operator=(U8 val)
 	//if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
 	{
 		//we need to collect two byte before painting one row
-		if ((access_addr & 0x1) == 0x0)
+		if ((access_addr & 0x1) == 0x1)
 		{
 			if (val) 
 			{
