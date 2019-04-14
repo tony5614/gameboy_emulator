@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
 
 	DMGZ80CPU cpu;
 	cpu.readROM("tetris.gb");
+
 	cpu.run();
 
 	/*

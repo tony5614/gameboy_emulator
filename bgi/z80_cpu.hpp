@@ -14,7 +14,6 @@ typedef unsigned short U16;
 
 #define CARTRIDGE_ROM_BASE     (0x0000)
 #define VIDEO_RAM_BASE         (0x8000)
-#define BG_MAP_ADDR            (0x9800)
 #define EXTERNAL_RAM_BASE      (0xA000)
 #define WORK_RAM_BASE          (0xC000)
 #define OAM_BASE               (0xFE00)
@@ -26,8 +25,8 @@ typedef unsigned short U16;
 #define TIMER_ADDR             (0xFF06)	//TMA timer
 #define TIMER_CTRL_ADDR        (0xFF07) //TAC timer control
 #define LCD_CTRL_REG           (0xFF40) //LCDC
-#define 	BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag
-#define 	BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag
+#define 	BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
+#define 	BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
 #define 	BG_WIN_ON_FALG         BIT(5)   //window on Flag
 #define 	BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
 
@@ -45,14 +44,19 @@ typedef unsigned short U16;
 #define STACK_BEGIN_ADDR       (0xFFFE)
 #define INT_SWITCH             (0xFFFF)
 
+#define BG_CHAR_DATA_SIZE      (0x1000)
+#define BG_CODE_DATA_SIZE      (0x400)
+
+
+
 #define MEMORY_SIZE            (65536)
 
 #define SCREEN_OFFSET          (10)
 #define RESOLUTION_X           (160)
 #define RESOLUTION_Y           (144)
 #define DEBUG_WINDOW_WIDTH     (200)
-#define BG_TILE_BUFFER_X       (256)
-#define BG_TILE_BUFFER_Y       (0)
+#define BG_TILE_BGI_BUFFER_X   (256)
+#define BG_TILE_BGI_BUFFER_Y   (0)
 
 
 #define ISR_VERTICAL_BLANKING  0x40
@@ -106,13 +110,90 @@ union HL
 	};
 };
 
+class DMGZ80CPU;
 
+class TILE_DOT_DATA_PAINTER
+{
+public:
+	static int paletteCodeToColor(U8 palette_color_code)
+	{
+		U8  color_code;
+		int color;
+		U8  bg_palette_color = 0xE4;//memory[BG_PALETTE_DATA];
+		U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+
+		//palette color code -> color code
+		color_code = palette_code_to_color_code[palette_color_code];
+
+		//color code -> color
+		switch (color_code)
+		{
+		case 0x0:
+			color = COLOR(0, 0, 0);
+			break;
+		case 0x1:
+			color = COLOR(85, 85, 85);
+			break;
+		case 0x2:
+			color = COLOR(170, 170, 170);
+			break;
+		case 0x3:
+			color = COLOR(255, 255, 255);
+			break;
+		default:
+			//printf("unknown color code\n");
+			break;
+		}
+		return color;
+	}
+	//paint 1 row, 8 dots
+	//in BG_TILE_BGI_BUFFER ,each row accommodates 32 tile (256 dots)
+	static void paintTileDotData(U16 dot_data_byte_idx, U8 upper_dot_byte, U8 lower_dot_byte)
+	{
+		// dot_data_idx = (dot_data_byte_idx >> 1) , because two bytes represent one row
+
+		// ---0---  ---8---       --------   --------
+		// ---1---  ---9---       --------   --------
+		// ---2---  --10---       --------   --------
+		// ---3---  --11---       --------   --------
+		// ---4---  -+12---       --------   --------
+		// ---5---  --13---       --------   --------
+		// ---6---  --14---       --------   --------
+		// ---7---  --15---   ~   --------   ---255--
+		//             ^-- dot_data_idx = 12      ^---- dot_data_idx = 255, 32 tiles 
+		//
+		// 12 / 8 = 1     -> x_pos = 1*8
+		// 12 / 256 = 0   -> y_tile_row = 0*8
+		// (12 % 8) = 4 -> y_pos = y_row + 4
+
+		dot_data_byte_idx = dot_data_byte_idx - VIDEO_RAM_BASE;
+		U16 dot_data_idx = (dot_data_byte_idx >> 1);
+		//each tile contains 64 dots
+		int x_pos = BG_TILE_BGI_BUFFER_X + (((dot_data_idx & 0xFF) >> 3) << 3);
+		int y_tile_row = (dot_data_idx >> 8) << 3;
+		int y_pos      = BG_TILE_BGI_BUFFER_Y + y_tile_row + ((dot_data_idx) & 0x7) ;
+		int bgi_color;
+		U8  color_code = 0;
+
+		for (int x = x_pos; x < (x_pos + 8); x++) 
+		{
+			color_code = 0;
+			color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
+			color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
+			bgi_color = paletteCodeToColor(color_code);
+			putpixel(x, y_pos, bgi_color);
+		}
+	}
+};
 class U8DATA
 {
 public:
-	static U16 *pc;
+	static U16                    *pc;
+	static DMGZ80CPU              *cpu;
+	static TILE_DOT_DATA_PAINTER  *tile_dot_data_painter;
+	//-------------------------------
 	U8  value;
-	U16 *access_addr;
+	U16 access_addr;
 	U8 _hang;
 	U8DATA()
 	{
@@ -123,11 +204,10 @@ public:
 	{
 		this->value = val;
 		_hang = true;
-
 	}
 	operator U8()
 	{
-		switch (*this->access_addr)
+		switch (this->access_addr)
 		{
 		//case 0xFF00:
 		case 0xFF70:
@@ -154,16 +234,16 @@ public:
 		case 0xFE02:
 		case 0xFE03:
 		//case 0xFFFF:
-			printf("pc= %04X ,cast operator @ %04X\n", *pc, *access_addr);
+			//printf("pc= %04X ,cast operator @ %04X\n", *pc, *access_addr);
 			break;
 		}
 		////printf("cast operator @ %04X\n", *access_addr);
-		if (*access_addr == 0xFF44)
+		if (access_addr == 0xFF44)
 		{
 			//while (_hang);
 			//this->value = 0x94;
 		}
-		else if (*access_addr == 0xFF00)
+		else if (access_addr == 0xFF00)
 		{
 			if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
 			{
@@ -197,13 +277,12 @@ public:
 				while (_hang);
 			}
 		}
-
 		return this->value;
 	}
 	U8* operator &()
 	{
 		//printf("get address operator @ %04X\n" ,*access_addr);
-		switch (*this->access_addr) 
+		switch (this->access_addr) 
 		{
 		//case 0xFF00:
 		case 0xFF70:
@@ -230,78 +309,37 @@ public:
 		case 0xFE02:
 		case 0xFE03:
 		//case 0xFFFF:
-				printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
+				//printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
 				break;
 		}
 		return &this->value;
 	}
-	U8DATA &operator=(U8 val)
-	{
-		U8 _hang = true;
-		switch (*this->access_addr)
-		{
-		//case 0xFF00:
-		case 0xFF70:
-		case 0xFF01:
-		case 0xFF02:
-		case 0xFF04:
-		case 0xFF05:
-		case 0xFF06:
-		case 0xFF07:
-		//case 0xFF0F:
-		case 0xFF40:
-		case 0xFF41:
-		case 0xFF42:
-		case 0xFF43:
-		case 0xFF45:
-		case 0xFF46:
-		case 0xFF47:
-		case 0xFF48:
-		case 0xFF49:
-		case 0xFF4A:
-		case 0xFF4B:
-		case 0xFE00:
-		case 0xFE01:
-		case 0xFE02:
-		case 0xFE03:
-		//case 0xFFFF:
-			printf("pc= %04X ,assign operator @ %04X\n", *pc, *access_addr);
-
-			break;
-		}
-		if (*access_addr == 0xFF00)
-		{
-			//reset joy pad
-			this->value = val | 0xCF;
-		}
-		//normal assignment
-		else
-		{
-			this->value = val;
-		}
-		return (*this);
-	}
+	U8DATA &operator=(U8 val);
 };
-U16 *U8DATA::pc;
 
+U16                    *U8DATA::pc;
+DMGZ80CPU              *U8DATA::cpu;
+TILE_DOT_DATA_PAINTER  *U8DATA::tile_dot_data_painter;
 
 class DEBUG_MEM
 {	
 public:
 	
-	U16 access_addr;
+	//U16 access_addr;
 	U8DATA  data[MEMORY_SIZE];	
 	//U8  data[MEMORY_SIZE];
 	U8  _hang;
+	U8DATA  *stack;
 	DEBUG_MEM()
 	{
 		_hang = true;
-		access_addr = 0;
+		stack = data + 0xCFF0;
+		//access_addr = 0;
 	}
 	U8DATA &operator[](U16 addr)
 	{
-		access_addr = addr;
-		this->data[addr].access_addr = &this->access_addr;
+		//access_addr = addr;
+		this->data[addr].access_addr = addr;
 		return this->data[addr];
 	}
 };
@@ -321,18 +359,24 @@ private:
 	U8 ime;                            //interrupt master enable
 
 	//emulator flag
-	U8           halt_state;
-	void*        tile_buf_ptr;
-	SYSTEMTIME   begin_time;
-	SYSTEMTIME   end_time;
-	U8           refresh_lcd;
-	unsigned int cpu_cycles;
+	U8               halt_state;
+	void*            tile_buf_ptr;
+	SYSTEMTIME       begin_time;
+	SYSTEMTIME       end_time;
+	U8               refresh_lcd;
+	unsigned int     cpu_cycles;
+	U8               tile_data_built = FALSE;
 
 public:
 	U16 pc;
+	TILE_DOT_DATA_PAINTER tile_dot_data_painter;
+	DEBUG_MEM memory;
 	DMGZ80CPU()
 	{
-		U8DATA::pc = &this->pc;
+		U8DATA::pc                    = &this->pc;
+		U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
+		U8DATA::cpu = this;
+
 		//boot rom
 		sp = STACK_BEGIN_ADDR;
 		pc = 0x0;
@@ -382,7 +426,6 @@ public:
 		//clear memory
 		memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
 	}
-	DEBUG_MEM memory;
 	inline	void printREG() 
 	{
 		//printf("A:%02X F:%02X\n", af.a, af.all & 0xFF);
@@ -428,6 +471,23 @@ public:
 
 	}
 
+	void outputBinary(std::string filename,int base, int size)
+	{
+		std::ofstream fout;
+		U8  one_byte;
+
+
+		fout.open(filename.c_str(), std::ios::binary);
+		for (int i = base; i < (base + size); i++)
+		{
+			one_byte = memory[i];
+			fout.write((char *)(&one_byte), sizeof(one_byte));
+		}
+		fout.close();
+
+		printMEM(0, 64);
+
+	}
 	inline U16 *idxToRegss(U8 idx) //00b ~ 11b -> BC DE HL SP
 	{
 		if (idx == 0x0)
@@ -586,9 +646,9 @@ public:
 		U8 _break = false;
 		U8 sixteen_byte[16];
 		U16 dot_data_ofst;
-		for (y_pos = BG_TILE_BUFFER_Y + 0; y_pos < (256 + BG_TILE_BUFFER_Y); y_pos += 8) 
+		for (y_pos = BG_TILE_BGI_BUFFER_Y + 0; y_pos < (256 + BG_TILE_BGI_BUFFER_Y); y_pos += 8)
 		{
-			for (x_pos = BG_TILE_BUFFER_X + 0; x_pos < (BG_TILE_BUFFER_X + 256); x_pos += 8)
+			for (x_pos = BG_TILE_BGI_BUFFER_X + 0; x_pos < (BG_TILE_BGI_BUFFER_X + 256); x_pos += 8)
 			{				
 				rectangle(x_pos, y_pos, x_pos + 8, y_pos+8);
 				//for (int i = 0; i < 16; i++) 
@@ -599,7 +659,7 @@ public:
 
 
 				video_ram_offset += 16;
-				if ((VIDEO_RAM_BASE + video_ram_offset) >= BG_MAP_ADDR) 
+				if (video_ram_offset >= BG_CHAR_DATA_SIZE)
 				{
 					_break = true;
 				}
@@ -607,13 +667,14 @@ public:
 			if (_break)
 				break;
 		}
+		tile_data_built = TRUE;
 	}
 	//get tile from built tile data
 	void getBackgroundTile(U8 chr_code, void *tile_ptr)
 	{
 		U8 tile_idx_x = chr_code & 0x1F; // *8 % 256
 		U8 tile_idx_y = chr_code >> 5;   // *8 / 256
-		getimage(BG_TILE_BUFFER_X + tile_idx_x * 8, BG_TILE_BUFFER_Y + tile_idx_y * 8, BG_TILE_BUFFER_X + (tile_idx_x + 1) * 8, BG_TILE_BUFFER_Y + (tile_idx_y + 1) * 8, tile_ptr);
+		getimage(BG_TILE_BGI_BUFFER_X + tile_idx_x * 8, BG_TILE_BGI_BUFFER_Y + tile_idx_y * 8, BG_TILE_BGI_BUFFER_X + (tile_idx_x + 1) * 8, BG_TILE_BGI_BUFFER_Y + (tile_idx_y + 1) * 8, tile_ptr);
 	}
 	//render 160 * 144 takes about 40ms 
 	//takes about 79800 cpu cycles
@@ -628,8 +689,8 @@ public:
 			{
 				chr_code = memory[bg_disp_data_addr++];
 				//out of viewport
-				if ((x >= 160) || (y >= 144))
-					continue;
+				//if ((x >= 160) || (y >= 144))
+				//	continue;
 				getBackgroundTile(chr_code, tile_buf_ptr);
 				putimage(x, y, tile_buf_ptr, COPY_PUT);
 			}
@@ -671,7 +732,7 @@ public:
 
 			if (ime && (memory[INT_SWITCH] | INT_FLAG_VERT_BLANKING))
 			{
-				ime = TRUE;
+				ime = FALSE;
 				memory[--sp] = pc >> 8;
 				memory[--sp] = pc & 0xFF;
 				pc = ISR_VERTICAL_BLANKING;
@@ -683,7 +744,11 @@ public:
 	void refreshLCD() 
 	{
 		GetSystemTime(&begin_time);
-		buildAllTileData();
+		if (tile_data_built == FALSE) 
+		{
+			//buildAllTileData();
+			tile_data_built = TRUE;
+		}
 		GetSystemTime(&end_time);
 		printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
 		printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
@@ -1433,14 +1498,14 @@ public:
 					//DI disable interrupt
 				case 0xF3:
 					pc += 1;
-					//printf("pc = 0x%X ", pc);
+					printf("pc = 0x%X ", pc);
 					ime = false;
 					printf("DI\n");
 					break;
 
 					//EI enable interrupt
 				case 0xFB:
-					//printf("pc = 0x%X ", pc);
+					printf("pc = 0x%X ", pc);
 					pc += 1;
 					ime = true;
 					printf("EI\n");
@@ -1451,6 +1516,7 @@ public:
 					//if IME is false -> starts from pc
 				case 0x76:
 					halt_state = TRUE;
+					//outputBinary("videoram.bin", 0x8000, 0x2000);
 					pc += 1;
 					break;
 
@@ -1684,7 +1750,7 @@ public:
 					sp += 2;
 					//printf("RET pc = %04X\n", pc);
 					//auto disable ime
-					this->ime = 0;
+					//this->ime = 0;
 					break;
 
 					//RETI	  
@@ -1844,5 +1910,68 @@ public:
 
 
 
+U8DATA &U8DATA::operator=(U8 val)
+{
+	U8 _hang = true;
+	switch (this->access_addr)
+	{
+		//case 0xFF00:
+	case 0xFF70:
+	case 0xFF01:
+	case 0xFF02:
+	case 0xFF04:
+	case 0xFF05:
+	case 0xFF06:
+	case 0xFF07:
+		//case 0xFF0F:
+	case 0xFF40:
+	case 0xFF41:
+	case 0xFF42:
+	case 0xFF43:
+	case 0xFF45:
+	case 0xFF46:
+	case 0xFF47:
+	case 0xFF48:
+	case 0xFF49:
+	case 0xFF4A:
+	case 0xFF4B:
+	case 0xFE00:
+	case 0xFE01:
+	case 0xFE02:
+	case 0xFE03:
+		//case 0xFFFF:
+		//printf("pc= %04X ,assign operator @ %04X\n", *pc, *access_addr);
 
+		break;
+	}
+	
+	U16 bg_tile_ram_end_eddr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
+	if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_eddr)))
+	//if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
+	{
+		//we need to collect two byte before painting one row
+		if ((access_addr & 0x1) == 0x0)
+		{
+			if (val) 
+			{
+				//printf("access_addr = %04X\n", access_addr);
+				//printf("%02X %02X\n", (U8)(cpu->memory[access_addr - 1]), val);
+			}
+			tile_dot_data_painter->paintTileDotData(access_addr, (U8)(cpu->memory[access_addr - 1]), val);
+		}
+	}
+	
+
+	if (access_addr == 0xFF00)
+	{
+		//reset joy pad
+		this->value = val | 0xCF;
+	}
+	//normal assignment
+	else
+	{
+		this->value = val;
+	}
+	return (*this);
+}
 
