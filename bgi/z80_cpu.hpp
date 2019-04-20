@@ -777,16 +777,12 @@ public:
 		U8    bhere = 1;
 		U8    ly = memory[LCD_Y_COORD_REG];
 		U8    _debug = true;
-
-		U8 FFA6 = 0;
-		U8 FFE1 = 0;
-		U8 FFE2 = 0;
 		U8 showpc = 0;
+
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
 			cpu_cycles++;
-
 			update_lcd_y_coord();
 			check_interrupt_and_dispatch_isr();
 
@@ -809,67 +805,7 @@ public:
 				aabb = (memory[pc + 2] << 8) | memory[pc + 1];
 				b = (memory[pc + 1] >> 3) & 0x7;
 
-
 				ly = memory[LCD_Y_COORD_REG];
-				//volatile bool _hang = true;
-				//if(((PERIPHERAL_BASE <= hl.all) && (hl.all <= 0xFF80)) || ((PERIPHERAL_BASE <= xx) && (xx <= 0xFF80)))
-				//{	
-				//	//printf("PERIPHERAL\n");
-				//	while(_hang);
-				//}
-
-
-				//if (pc == 0x2F3) 
-				//{
-				//	buildAllTileData();
-				//	buildBackground();
-				//	getchar();
-				//}
-
-				//U8 _hang = TRUE;
-				//if (this->pc == 0x2ED)
-				//	while (_hang);
-				//printf("ROM\n");
-				//printf("F\n");
-				//printf("00:%04X : %04X \n", pc,opcode);
-
-				//if(this->pc == 0x40)
-				//{
-				//	buildAllTileData();
-				//	buildBackground();
-				//}
-				/*
-				if (last_FFA6 != (U8)this->memory[0xFFA6])
-				{
-					printf("(0xFFA6) = 0x%02X\n", (U8)this->memory[0xFFA6]);
-				}
-				last_FFA6 = (U8)this->memory[0xFFA6];
-
-
-
-				if (last_FFE1 != (U8)this->memory[0xFFE1])
-				{
-					printf("(0xFFE1) = 0x%02X\n", (U8)this->memory[0xFFE1]);
-				}
-
-
-				BOOL _hang = TRUE;
-				if ((memory[0xFFE1] == 0x6))
-					while (_hang);
-				*/
-
-				FFE1 = (U8)this->memory[0xFFE1];
-				FFE2 = (U8)this->memory[0xFFE2];
-				FFA6 = (U8)this->memory[0xFFA6];
-				//if(0x35 == FFE1)
-				//	printf("last_FFE1 = 0x%02X\n", FFE1);
-				if (showpc)
-				{
-					printf("---pc = %02X\n", pc);
-					printf("FFA6 = %02X\n", FFA6);
-					printf("FFE2 = %02X\n", FFE2);
-					printf("sp = %04X\n", sp);
-				}
 
 
 				printREG();
@@ -1553,7 +1489,7 @@ public:
 					pc += 1;
 					//printf("pc = 0x%X ", pc);
 					ime = false;
-					printf("DI cpu_cycles = %08X\n", cpu_cycles);
+					//printf("DI cpu_cycles = %08X\n", cpu_cycles);
 					break;
 
 					//EI enable interrupt
@@ -1561,7 +1497,7 @@ public:
 					//printf("pc = 0x%X ", pc);
 					pc += 1;
 					ime = true;
-					printf("EI cpu_cycles = %08X\n", cpu_cycles);
+					//printf("EI cpu_cycles = %08X\n", cpu_cycles);
 					break;
 
 					//halt
@@ -1571,9 +1507,7 @@ public:
 					halt_state = TRUE;
 					//outputBinary("videoram.bin", 0x8000, 0x2000);
 					pc += 1;
-					printf("cpu_cycles = %08X ,halt_state = TRUE\n", cpu_cycles);
-					printf("FFA6 = %02X\n", FFA6);
-					printf("FFE2 = %02X\n\n", FFE2);
+					//printf("cpu_cycles = %08X ,halt_state = TRUE\n", cpu_cycles);
 					break;
 
 					//increment A B..L (HL) by 1 		
