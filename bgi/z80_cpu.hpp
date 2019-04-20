@@ -1,7 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <windows.h>
-#include <stdlib.h>d
+#include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -56,7 +56,7 @@ typedef unsigned short U16;
 #define LCD_WIDTH              (160)
 #define LCD_HEIGHT             (144)
 #define VIEWPORT_X             (300)
-#define VIEWPORT_Y             (300)
+#define VIEWPORT_Y             (225)
 
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BGI_BUFFER_X   (256)
@@ -710,7 +710,7 @@ public:
 	}
 	void update_lcd_y_coord() 
 	{
-		if ((cpu_cycles & 0x1FF) == 0)
+		if ((cpu_cycles & 0x7F) == 0)
 		{
 			//each horizontal line takes 512 cpu cycles
 			memory[LCD_Y_COORD_REG] = (U8)(memory[LCD_Y_COORD_REG] + 1);
@@ -730,6 +730,7 @@ public:
 		{
 			//wake from halt_state
 			halt_state = FALSE;
+			//printf("\n");
 			//set int flag
 			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
 			//trigger refresh lcd, only one time
@@ -752,17 +753,18 @@ public:
 	void refreshLCD() 
 	{
 
-		GetSystemTime(&end_time);
-		printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
-		printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
+		//GetSystemTime(&end_time);
+		//printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
+		//printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
 		buildBackground();
 
 
 		//viewport
 		int scy = memory[SCY];
 		int scx = memory[SCX];
-		getimage(scx, scy, scx + LCD_WIDTH, scy + LCD_HEIGHT, viewport_buf_ptr);
-		putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+		//getimage(scx, scy, scx + LCD_WIDTH, scy + LCD_HEIGHT, viewport_buf_ptr);
+		getimage(scx, scy, scx + LCD_WIDTH, 0 + LCD_HEIGHT, viewport_buf_ptr);
+		putimage(VIEWPORT_X, VIEWPORT_Y-100, viewport_buf_ptr, COPY_PUT);
 	}
 
 	void run()
@@ -776,6 +778,10 @@ public:
 		U8    ly = memory[LCD_Y_COORD_REG];
 		U8    _debug = true;
 
+		U8 FFA6 = 0;
+		U8 FFE1 = 0;
+		U8 FFE2 = 0;
+		U8 showpc = 0;
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
@@ -794,6 +800,7 @@ public:
 			if (halt_state == TRUE) 
 			{
 				//do nothing
+				//printf(".");
 			}
 			else
 			{
@@ -810,19 +817,18 @@ public:
 				//	//printf("PERIPHERAL\n");
 				//	while(_hang);
 				//}
-				
-			
+
+
 				//if (pc == 0x2F3) 
 				//{
 				//	buildAllTileData();
 				//	buildBackground();
 				//	getchar();
 				//}
-				
+
 				//U8 _hang = TRUE;
 				//if (this->pc == 0x2ED)
 				//	while (_hang);
-				printREG();
 				//printf("ROM\n");
 				//printf("F\n");
 				//printf("00:%04X : %04X \n", pc,opcode);
@@ -832,8 +838,41 @@ public:
 				//	buildAllTileData();
 				//	buildBackground();
 				//}
+				/*
+				if (last_FFA6 != (U8)this->memory[0xFFA6])
+				{
+					printf("(0xFFA6) = 0x%02X\n", (U8)this->memory[0xFFA6]);
+				}
+				last_FFA6 = (U8)this->memory[0xFFA6];
 
-			
+
+
+				if (last_FFE1 != (U8)this->memory[0xFFE1])
+				{
+					printf("(0xFFE1) = 0x%02X\n", (U8)this->memory[0xFFE1]);
+				}
+
+
+				BOOL _hang = TRUE;
+				if ((memory[0xFFE1] == 0x6))
+					while (_hang);
+				*/
+
+				FFE1 = (U8)this->memory[0xFFE1];
+				FFE2 = (U8)this->memory[0xFFE2];
+				FFA6 = (U8)this->memory[0xFFA6];
+				//if(0x35 == FFE1)
+				//	printf("last_FFE1 = 0x%02X\n", FFE1);
+				if (showpc)
+				{
+					printf("---pc = %02X\n", pc);
+					printf("FFA6 = %02X\n", FFA6);
+					printf("FFE2 = %02X\n", FFE2);
+					printf("sp = %04X\n", sp);
+				}
+
+
+				printREG();
 				switch (opcode)
 				{
 				case 0xC3:
@@ -1512,17 +1551,17 @@ public:
 					//DI disable interrupt
 				case 0xF3:
 					pc += 1;
-					printf("pc = 0x%X ", pc);
+					//printf("pc = 0x%X ", pc);
 					ime = false;
-					printf("DI\n");
+					printf("DI cpu_cycles = %08X\n", cpu_cycles);
 					break;
 
 					//EI enable interrupt
 				case 0xFB:
-					printf("pc = 0x%X ", pc);
+					//printf("pc = 0x%X ", pc);
 					pc += 1;
 					ime = true;
-					printf("EI\n");
+					printf("EI cpu_cycles = %08X\n", cpu_cycles);
 					break;
 
 					//halt
@@ -1532,6 +1571,9 @@ public:
 					halt_state = TRUE;
 					//outputBinary("videoram.bin", 0x8000, 0x2000);
 					pc += 1;
+					printf("cpu_cycles = %08X ,halt_state = TRUE\n", cpu_cycles);
+					printf("FFA6 = %02X\n", FFA6);
+					printf("FFE2 = %02X\n\n", FFE2);
 					break;
 
 					//increment A B..L (HL) by 1 		
@@ -1550,7 +1592,10 @@ public:
 					af.f_n = 0;
 					af.f_z = (reg_value == 0) ? 1 : 0;
 					pc += 1;
-					//printf("INC  %04X\n", (*idxToRegr_HL((opcode >> 3) & 0x7)));
+					if(opcode == 0x34 && hl.all == 0xFFE2)
+					{
+						//printf("cpu_cycles :%08X , pc %02X : INC  %04X\n", cpu_cycles , pc,(*idxToRegr_HL((opcode >> 3) & 0x7)));
+					}
 					break;
 
 					//INC increment BC..HL by 1 	
@@ -1721,40 +1766,48 @@ public:
 					//RET NZ  
 				case 0xC0:
 					if (!af.f_z)
+					{
 						pc = (memory[sp + 1] << 8) | memory[sp];
+						sp += 2;
+					}
 					else
 						pc += 1;
-					sp += 2;
 					//printf("RET NZ = %04X\n", pc);
 					break;
 
 					//RET Z   
 				case 0xC8:
 					if (af.f_z)
+					{
 						pc = (memory[sp + 1] << 8) | memory[sp];
+						sp += 2;
+					}
 					else
 						pc += 1;
-					sp += 2;
 					//printf("RET Z = %04X\n", pc);
 					break;
 
 					//RET NC  
 				case 0xD0:
 					if (!af.f_c)
+					{
 						pc = (memory[sp + 1] << 8) | memory[sp];
+						sp += 2;
+					}
 					else
 						pc += 1;
-					sp += 2;
 					//printf("RET NC pc = %04X\n", pc);
 					break;
 
 					//RET C   
 				case 0xD8:
 					if (af.f_c)
+					{
 						pc = (memory[sp + 1] << 8) | memory[sp];
+						sp += 2;
+					}
 					else
 						pc += 1;
-					sp += 2;
 					//printf("RET C pc = %04X\n", pc);
 					break;
 
