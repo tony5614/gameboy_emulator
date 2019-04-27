@@ -370,7 +370,7 @@ private:
 	SYSTEMTIME       end_time;
 	U8               refresh_lcd;
 	unsigned int     cpu_cycles;
-	U8               tile_data_built = FALSE;
+	U8               tile_data_built;
 
 public:
 	U16 pc;
@@ -1008,15 +1008,6 @@ public:
 				case 0x85:
 				case 0x86:
 				case 0x87:
-					//---------for DAA
-					// to decimal
-					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					r_HL_decimal = (xx >> 4) * 10 + (xx & 0xF);
-					a_decimal = a_decimal + r_HL_decimal;
-					//----------------------
 					//cpu_cycles += 1;
 					//printf("add register to A\n", pc, sp);
 					prev_value = af.a;
@@ -1031,15 +1022,6 @@ public:
 
 					//ADD xx to A
 				case 0xC6:
-					//---------for DAA
-					// to decimal
-					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
-					a_decimal = a_decimal + xx_decimal;
-					//----------------------
 					//cpu_cycles += 2;
 					//printf("add xx to A\n", pc, sp);
 					prev_value = af.a;
@@ -1318,7 +1300,6 @@ public:
 					memory[0xFFCE] = 0;
 					memory[0xFF98] = 0;
 					memory[0xFFE3] = 0;
-
 					memory[0xFFB6] = 0x3E;
 					memory[0xFFB7] = 0xC0;
 					memory[0xFFB8] = 0xE0;
@@ -1332,10 +1313,7 @@ public:
 					memory[0xFFC0] = 0x37;
 					memory[0xFFC1] = 0x1C;
 					memory[0xFFE1] = 0x24;
-
-
 					memory[0xFF00] = 0xEF;
-
 					pc = 0x17E;
 					}
 					}*/
@@ -1415,15 +1393,6 @@ public:
 				case 0x8D:
 				case 0x8E:
 				case 0x8F:
-					//---------for DAA
-					// to decimal
-					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
-					a_decimal = a_decimal + r_HL_decimal + af.f_c;
-					//----------------------
 					//cpu_cycles += 1;
 					prev_value = af.a;
 					af.a = (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
@@ -1437,15 +1406,6 @@ public:
 
 					//ADC add xx + flag_carry to A
 				case 0xCE:
-					//---------for DAA
-					// to decimal
-					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
-					a_decimal = a_decimal + xx_decimal + af.f_c;
-					//----------------------
 					//cpu_cycles += 1;
 					prev_value = af.a;
 					af.a += (xx + af.f_c);
@@ -1544,19 +1504,20 @@ public:
 
 					//DAA decimal adjust A
 				case 0x27:
-					printREG();
-					//cpu_cycles += 1;
-					if (af.f_n)//substract
+					//subtraction
+					if (af.f_n)
 					{
-						af.a = (((a_decimal % 100) / 10) << 4) | (a_decimal % 10);
-					}
-					else//addition
+						if (af.f_c) { af.a -= 0x60; }
+						if (af.f_h) { af.a -= 0x06; }
+					}//addition
+					else
 					{
-						af.f_c = (a_decimal >= 100) ? 1 : 0;
-						af.a = (((a_decimal % 100) / 10) << 4) | (a_decimal % 10);
+						if (af.f_c || (af.a & 0xFF) > 0x99) { af.a += 0x60; af.f_c = 1; }
+						if (af.f_h || (af.a & 0x0F) > 0x09) { af.a += 0x06; }
 					}
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
+
+					//printf("a_decimal = %03d\n", a_decimal);
+					//printf("af.a      = %03X\n", af.a);
 					af.f_z = (af.a == 0) ? 1 : 0;
 					af.f_h = 0;
 					//printf("DAA  %04X\n", af.a);
@@ -1953,15 +1914,6 @@ public:
 
 					//SBC subtract xx+cy from A
 				case 0xDE:
-					//---------for DAA
-					// to decimal
-					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
-					a_decimal = a_decimal - xx_decimal - af.f_c;
-					//----------------------
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, xx, af.f_c);
 					pc += 2;
@@ -1983,15 +1935,6 @@ public:
 				case 0x9D:
 				case 0x9E:
 				case 0x9F:
-					//---------for DAA
-					// to decimal
-					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
-					a_decimal = a_decimal - r_HL_decimal - af.f_c;
-					//----------------------
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)), af.f_c);
 					pc += 2;
@@ -2013,15 +1956,6 @@ public:
 				case 0x95:
 				case 0x96:
 				case 0x97:
-					//---------for DAA
-					// to decimal
-					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
-					a_decimal = a_decimal - r_HL_decimal;
-					//----------------------
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)));
 					pc += 1;
@@ -2034,15 +1968,6 @@ public:
 
 					//SUB xx
 				case 0xD6:
-					//---------for DAA
-					// to decimal
-					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
-					printREG();
-					printf("a_decimal = %03d\n", a_decimal);
-					printf("af.a      = %03X\n", af.a);
-					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
-					a_decimal = a_decimal - xx_decimal;
-					//----------------------
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)));
 					pc += 2;
@@ -2165,4 +2090,3 @@ U8DATA &U8DATA::operator=(U8 val)
 	}
 	return (*this);
 }
-
