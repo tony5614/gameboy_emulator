@@ -175,11 +175,11 @@ public:
 		//each tile contains 64 dots
 		int x_pos = BG_TILE_BGI_BUFFER_X + (((dot_data_idx & 0xFF) >> 3) << 3);
 		int y_tile_row = (dot_data_idx >> 8) << 3;
-		int y_pos      = BG_TILE_BGI_BUFFER_Y + y_tile_row + ((dot_data_idx) & 0x7) ;
+		int y_pos = BG_TILE_BGI_BUFFER_Y + y_tile_row + ((dot_data_idx) & 0x7);
 		int bgi_color;
 		U8  color_code = 0;
 
-		for (int x = x_pos; x < (x_pos + 8); x++) 
+		for (int x = x_pos; x < (x_pos + 8); x++)
 		{
 			color_code = 0;
 			color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
@@ -213,7 +213,7 @@ public:
 	{
 		switch (this->access_addr)
 		{
-		//case 0xFF00:
+			//case 0xFF00:
 		case 0xFF70:
 		case 0xFF01:
 		case 0xFF02:
@@ -221,7 +221,7 @@ public:
 		case 0xFF05:
 		case 0xFF06:
 		case 0xFF07:
-		//case 0xFF0F:
+			//case 0xFF0F:
 		case 0xFF40:
 		case 0xFF41:
 		case 0xFF42:
@@ -237,7 +237,7 @@ public:
 		case 0xFE01:
 		case 0xFE02:
 		case 0xFE03:
-		//case 0xFFFF:
+			//case 0xFFFF:
 			//printf("pc= %04X ,cast operator @ %04X\n", *pc, *access_addr);
 			break;
 		}
@@ -286,9 +286,9 @@ public:
 	U8* operator &()
 	{
 		//printf("get address operator @ %04X\n" ,*access_addr);
-		switch (this->access_addr) 
+		switch (this->access_addr)
 		{
-		//case 0xFF00:
+			//case 0xFF00:
 		case 0xFF70:
 		case 0xFF01:
 		case 0xFF02:
@@ -296,7 +296,7 @@ public:
 		case 0xFF05:
 		case 0xFF06:
 		case 0xFF07:
-		//case 0xFF0F:
+			//case 0xFF0F:
 		case 0xFF40:
 		case 0xFF41:
 		case 0xFF42:
@@ -312,9 +312,9 @@ public:
 		case 0xFE01:
 		case 0xFE02:
 		case 0xFE03:
-		//case 0xFFFF:
-				//printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
-				break;
+			//case 0xFFFF:
+			//printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
+			break;
 		}
 		return &this->value;
 	}
@@ -326,11 +326,11 @@ DMGZ80CPU              *U8DATA::cpu;
 TILE_DOT_DATA_PAINTER  *U8DATA::tile_dot_data_painter;
 
 class DEBUG_MEM
-{	
+{
 public:
-	
+
 	//U16 access_addr;
-	U8DATA  data[MEMORY_SIZE];	
+	U8DATA  data[MEMORY_SIZE];
 	//U8  data[MEMORY_SIZE];
 	U8  _hang;
 	U8DATA  *stack;
@@ -362,7 +362,7 @@ private:
 	U16 stack[16];
 	U8 ime;                            //interrupt master enable
 
-	//emulator flag
+									   //emulator flag
 	U8               halt_state;
 	void*            tile_buf_ptr;
 	void*            viewport_buf_ptr;
@@ -378,40 +378,43 @@ public:
 	DEBUG_MEM memory;
 	DMGZ80CPU()
 	{
-		U8DATA::pc                    = &this->pc;
+		U8DATA::pc = &this->pc;
 		U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
 		U8DATA::cpu = this;
 
 		//boot rom
+		//sp = STACK_BEGIN_ADDR;
+		//pc = 0x0;
+		//af.all = 0x0000;
+		//bc.all = 0x0000;
+		//de.all = 0x0000;
+		//hl.all = 0x0000;
+		ime = TRUE;
+
+		tile_buf_ptr = malloc(imagesize(0, 0, 8, 8));
+		viewport_buf_ptr = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
+		halt_state = FALSE;
+		cpu_cycles = 0;
+		refresh_lcd = FALSE;
+		
+
+
 		sp = STACK_BEGIN_ADDR;
-		pc = 0x0;
-		af.all = 0x0000;
+		pc = 0x100;
+		af.all = 0x1100;
 		bc.all = 0x0000;
 		de.all = 0x0000;
 		hl.all = 0x0000;
 		ime = TRUE;
 
-		tile_buf_ptr      = malloc(imagesize(0,0,8,8));
-		viewport_buf_ptr  = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
-		halt_state = FALSE;
-		cpu_cycles = 0;
-		refresh_lcd = FALSE;
-
-		//load video ram		0x8000 ~ 0x8270
-		//sp = 0xCFF9;
-		//pc = 0x27C3;
-		//af.all = 0x09A0;
-		//bc.all = 0x0000;
-		//de.all = 0x0369;
-		//hl.all = 0x0369;
-
 		//main program start
-		sp = STACK_BEGIN_ADDR;
-		pc = 0x150;
-		af.all = 0x01B0;
-		bc.all = 0x0013;
-		de.all = 0x00D8;
-		hl.all = 0x014D;
+		//tetris rom initial state
+		//sp = STACK_BEGIN_ADDR;
+		//pc = 0x150;
+		//af.all = 0x01B0;
+		//bc.all = 0x0013;
+		//de.all = 0x00D8;
+		//hl.all = 0x014D;
 
 		//quick debug from
 		//sp = 0xCFFF;
@@ -428,24 +431,24 @@ public:
 		//bc.all = 0x0000;
 		//de.all = 0x00D8;
 		//hl.all = 0x97FF;
-		
+
 		//clear memory
 		memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
 	}
-	inline	void printREG() 
+	inline	void printREG()
 	{
-		//printf("A:%02X F:%02X\n", af.a, af.all & 0xFF);
-		//printf("B:%02X C:%02X\n", bc.b, bc.c);
-		//printf("D:%02X E:%02X\n", de.d, de.e);
-		//printf("H:%02X L:%02X\n", hl.h, hl.l);
-		//printf("PC:%04X SP:%04X\n", pc, sp);
+		printf("A:%02X F:%02X\n", af.a, af.all & 0xFF);
+		printf("B:%02X C:%02X\n", bc.b, bc.c);
+		printf("D:%02X E:%02X\n", de.d, de.e);
+		printf("H:%02X L:%02X\n", hl.h, hl.l);
+		printf("PC:%04X SP:%04X\n", pc, sp);
 	}
 	void printMEM(int base, int length)
 	{
 		for (int i = base; i < (base + length); i++)
 		{
 			if ((i & 0xF) == 0)
-			{	
+			{
 				//printf("\n%04X : ", base + i);
 			}
 			//printf("%02X ", memory[base + i]);
@@ -457,17 +460,17 @@ public:
 		std::ifstream fin;
 		int rom_size;
 		U8  one_byte;
-	
+
 
 		fin.open(filename.c_str(), std::ios::ate | std::ios::binary);
 		//get rom size
 		rom_size = fin.tellg();
 		//move pointer to beginning of rom
 		fin.seekg(0, fin.beg);
-		for(int i = 0; i < rom_size; i++)
+		for (int i = 0; i < rom_size; i++)
 		{
 			//fin.read((char *)(&memory[0] + CARTRIDGE_ROM_BASE + sizeof(U8DATA) * i), sizeof(char));
-			
+
 			fin.read((char *)(&one_byte), sizeof(one_byte));
 			memory[i] = one_byte;
 		}
@@ -477,7 +480,7 @@ public:
 
 	}
 
-	void outputBinary(std::string filename,int base, int size)
+	void outputBinary(std::string filename, int base, int size)
 	{
 		std::ofstream fout;
 		U8  one_byte;
@@ -578,15 +581,15 @@ public:
 		U8  color_code;
 		int color;
 		U8  bg_palette_color = 0xE4;//memory[BG_PALETTE_DATA];
-		U8  palette_code_to_color_code[4] = {(bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3};
-		
+		U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+
 		//palette color code -> color code
 		color_code = palette_code_to_color_code[palette_color_code];
-		
+
 		//color code -> color
-		
-			
-		switch(color_code)
+
+
+		switch (color_code)
 		{
 		case 0x0:
 			color = COLOR(0, 0, 0);
@@ -619,13 +622,13 @@ public:
 	//          |
 	//
 	//build each 8x8 tile
-	void buildTile(int y_pos,int x_pos, U16 dot_data_ofst)
+	void buildTile(int y_pos, int x_pos, U16 dot_data_ofst)
 	{
 		int data_idx = 0;
 		U8 upper_dot_byte, lower_dot_byte;
 		int color;
 		U8 color_code = 0;
-		for (int i = 0; i < 16; i += 2) 
+		for (int i = 0; i < 16; i += 2)
 		{
 			upper_dot_byte = memory[dot_data_ofst + i];
 			lower_dot_byte = memory[dot_data_ofst + i + 1];
@@ -655,8 +658,8 @@ public:
 		for (y_pos = BG_TILE_BGI_BUFFER_Y + 0; y_pos < (256 + BG_TILE_BGI_BUFFER_Y); y_pos += 8)
 		{
 			for (x_pos = BG_TILE_BGI_BUFFER_X + 0; x_pos < (BG_TILE_BGI_BUFFER_X + 256); x_pos += 8)
-			{				
-				rectangle(x_pos, y_pos, x_pos + 8, y_pos+8);
+			{
+				rectangle(x_pos, y_pos, x_pos + 8, y_pos + 8);
 				//for (int i = 0; i < 16; i++) 
 				//{
 				//	sixteen_byte[i] = memory[VIDEO_RAM_BASE + video_ram_offset + i];
@@ -689,36 +692,41 @@ public:
 		U8    chr_code; //BG MAP
 		U16   bg_disp_data_addr = ((memory[LCD_CTRL_REG] & BG_CODE_SEL_FALG) ? 0x9C00 : 0x9800);
 
-		for(int y = 0; y < 256; y += 8)
+		for (int y = 0; y < 256; y += 8)
 		{
-			for(int x = 0; x < 256; x += 8)
+			for (int x = 0; x < 256; x += 8)
 			{
 				chr_code = memory[bg_disp_data_addr++];
 				//out of viewport
 				//if ((x >= 160) || (y >= 144))
 				//	continue;
 				getBackgroundTile(chr_code, tile_buf_ptr);
+
 				putimage(x, y, tile_buf_ptr, COPY_PUT);
 			}
 		}
 	}
-	void debugPPU() 
+	void debugPPU()
 	{
 		rectangle(0, 0, 257, 257);
 		buildAllTileData();
 		buildBackground();
 	}
-	void update_lcd_y_coord() 
+	void update_lcd_y_coord()
 	{
+		//if (((//cpu_cycles + 5)% 228) <= 10)
 		if ((cpu_cycles & 0x7F) == 0)
 		{
 			//each horizontal line takes 512 cpu cycles
 			memory[LCD_Y_COORD_REG] = (U8)(memory[LCD_Y_COORD_REG] + 1);
 			if (((U8)memory[LCD_Y_COORD_REG]) == 154)
+			{
+				//this->refresh_lcd = TRUE;
 				memory[LCD_Y_COORD_REG] = (U8)0x0;
+			}
 		}
 	}
-	void check_interrupt_and_dispatch_isr() 
+	void check_interrupt_and_dispatch_isr()
 	{
 		//
 		//memory[INT_FLAGS_ADDR];
@@ -726,18 +734,19 @@ public:
 
 		//not need to clear int flag, programmer would clear flag before using it
 		//vertical blanking interupt
-		if (memory[LCD_Y_COORD_REG] == 0) 
+		if (memory[LCD_Y_COORD_REG] == 0)
 		{
 			//wake from halt_state
 			halt_state = FALSE;
 			//printf("\n");
 			//set int flag
 			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
+
 			//trigger refresh lcd, only one time
-			if((cpu_cycles & 0x1FF) == 0)
+			if ((cpu_cycles & 0x1FF) == 0)
 				this->refresh_lcd = TRUE;
 
-			if (ime && (memory[INT_SWITCH] | INT_FLAG_VERT_BLANKING))
+			if (ime && (memory[INT_SWITCH] & INT_FLAG_VERT_BLANKING))
 			{
 				ime = FALSE;
 				memory[--sp] = pc >> 8;
@@ -748,9 +757,9 @@ public:
 			}
 		}
 
-		
+
 	}
-	void refreshLCD() 
+	void refreshLCD()
 	{
 
 		//GetSystemTime(&end_time);
@@ -764,7 +773,7 @@ public:
 		int scx = memory[SCX];
 		//getimage(scx, scy, scx + LCD_WIDTH, scy + LCD_HEIGHT, viewport_buf_ptr);
 		getimage(scx, scy, scx + LCD_WIDTH, 0 + LCD_HEIGHT, viewport_buf_ptr);
-		putimage(VIEWPORT_X, VIEWPORT_Y-100, viewport_buf_ptr, COPY_PUT);
+		putimage(VIEWPORT_X, VIEWPORT_Y - 100, viewport_buf_ptr, COPY_PUT);
 	}
 
 	void run()
@@ -776,7 +785,12 @@ public:
 		U8    carry;
 		U8    bhere = 1;
 		U8    ly = memory[LCD_Y_COORD_REG];
-		U8    _debug = true;
+		//for DAA
+		U8    a_decimal;
+		U8    xx_decimal;
+		U8    r_HL_decimal;
+
+		U8    _debug = true;		
 		U8 showpc = 0;
 
 		//each loop takes about 0.0005 ms
@@ -786,17 +800,18 @@ public:
 			update_lcd_y_coord();
 			check_interrupt_and_dispatch_isr();
 
-			if ((this->refresh_lcd == TRUE) && (pc == 0x2F0)) 
+			if ((this->refresh_lcd == TRUE))
 			{
 				refresh_lcd = FALSE;
 				refreshLCD();
 			}
 
 			//
-			if (halt_state == TRUE) 
+			if (halt_state == TRUE)
 			{
 				//do nothing
 				//printf(".");
+				//cpu_cycles++;
 			}
 			else
 			{
@@ -807,132 +822,167 @@ public:
 
 				ly = memory[LCD_Y_COORD_REG];
 
+				//printf("opcode = %04X, clk = %d , pc = %04X\n", opcode, cpu_cycles, pc);
 
-				printREG();
+				if(showpc)
+					printREG();
 				switch (opcode)
 				{
 				case 0xC3:
 					pc = aabb;
+					//cpu_cycles += 4;
 					//printf("jp %04X\n", pc);
 					break;
 
 				case 0xE9:
 					pc = hl.all;
+					//cpu_cycles += 1;
 					//printf("jp %04X\n", pc);
 					break;
 
 				case 0xDA:
 					pc += 3;
 					pc = (af.f_c) ? (aabb) : (pc);
+					//cpu_cycles += 3;
 					//printf("jp c %04X\n", pc);
 					break;
 
 				case 0xD2:
 					pc += 3;
 					pc = (!af.f_c) ? (aabb) : (pc);
+					//cpu_cycles += 3;
 					//printf("jp nc %04X\n", pc);
 					break;
 
 				case 0xC2:
 					pc += 3;
 					pc = (!af.f_z) ? (aabb) : (pc);
+					//cpu_cycles += 3;
 					//printf("jp nz %04X\n", pc);
 					break;
 
 				case 0xCA:
 					pc += 3;
 					pc = (af.f_z) ? (aabb) : (pc);
+					//cpu_cycles += 3;
 					//printf("jp z %04X\n", pc);
 					break;
 
 				case 0x18:
 					pc += 2;
 					//printf("jr %04X\n", (char)xx + pc);
+					//cpu_cycles += 3;
 					pc += (char)xx;
 					break;
 
 				case 0x38:
 					pc += 2;
 					//printf("jr c %04X\n", pc + (char)xx);
-					pc += (af.f_c) ? (xx) : (0);
+					//cpu_cycles += 2;
+					pc += (af.f_c) ? ((char)xx) : (0);
 					break;
 
 				case 0x30:
 					pc += 2;
 					//printf("jr nc %04X\n", pc + (char)xx);
-					pc += (!af.f_c) ? (xx) : (0);
+					//cpu_cycles += 2;
+					pc += (!af.f_c) ? ((char)xx) : (0);
 					break;
 
 				case 0x20:
 					pc += 2;
 					//printf("jr nz %04X\n", pc + (char)xx);
+					//cpu_cycles += 2;
 					pc += (!af.f_z) ? ((char)xx) : (0);
 					break;
 
 				case 0x28:
 					pc += 2;
 					//printf("jr z %04X\n", pc + (char)xx);
-					pc += (af.f_z) ? (xx) : (0);
+					//cpu_cycles += 2;
+					pc += (af.f_z) ? ((char)xx) : (0);
 					break;
 
-				//CALL $aabb
-				case 0xCD: 
-					pc += 3;				
+					//CALL $aabb
+				case 0xCD:
+					pc += 3;
 					memory[--sp] = pc >> 8;
 					memory[--sp] = pc & 0xFF;
 					pc = aabb;
+					//cpu_cycles += 6;
 					break;
-			
-				//CALL C,$aabb
+
+					//CALL C,$aabb
 				case 0xDC:
-					pc += 3;	
-					if(af.f_c)
+					pc += 3;
+					if (af.f_c)
 					{
 						memory[--sp] = pc >> 8;
 						memory[--sp] = pc & 0xFF;
 						pc = aabb;
-					}				
+						//cpu_cycles += 6;
+					}
+					else
+					{
+						//cpu_cycles += 3;
+					}
 					break;
-			
-				//CALL NC,$aabb
+
+					//CALL NC,$aabb
 				case 0xD4:
-					pc += 3;			
-					if(!af.f_c)
+					pc += 3;
+					if (!af.f_c)
 					{
 						memory[--sp] = pc >> 8;
 						memory[--sp] = pc & 0xFF;
 						pc = aabb;
-					}	
+						//cpu_cycles += 6;
+					}
+					else
+					{
+						//cpu_cycles += 3;
+					}
 					break;
-			
-				//CALL NZ,$aabb
+
+					//CALL NZ,$aabb
 				case 0xC4:
-					pc += 3;		
-					if(!af.f_z)
+					pc += 3;
+					if (!af.f_z)
 					{
 						memory[--sp] = pc >> 8;
 						memory[--sp] = pc & 0xFF;
 						pc = aabb;
-					}	
+						//cpu_cycles += 6;
+					}
+					else
+					{
+						//cpu_cycles += 3;
+					}
 					break;
-			
-				//CALL Z,$aabb
+
+					//CALL Z,$aabb
 				case 0xCC:
-					pc += 3;	
-					if(af.f_z)
+					pc += 3;
+					if (af.f_z)
 					{
 						memory[--sp] = pc >> 8;
 						memory[--sp] = pc & 0xFF;
 						pc = aabb;
-					}	
+						//cpu_cycles += 6;
+					}
+					else
+					{
+						//cpu_cycles += 3;
+					}
 					break;
 
 				case 0x00:
 					pc += 1;
+					//cpu_cycles += 1;
 					//printf("nop");
 					break;
 
-				//RST
+					//RST
 				case 0xC7:
 				case 0xCF:
 				case 0xD7:
@@ -942,13 +992,14 @@ public:
 				case 0xF7:
 				case 0xFF:
 					pc += 1;
-					memory[--sp] = (pc >> 8) ;
+					memory[--sp] = (pc >> 8);
 					memory[--sp] = (pc & 0xFF);
 					pc = idxToP((opcode >> 3) & 7);
-					//printf("rst %04X , sp = %04X\n", pc, sp);
+					printf("rst %04X , sp = %04X\n", pc, sp);
+					//cpu_cycles += 4;
 					break;
 
-					//add A.B..(HL)  to A
+					//ADD A.B..(HL)  to A
 				case 0x80:
 				case 0x81:
 				case 0x82:
@@ -957,6 +1008,16 @@ public:
 				case 0x85:
 				case 0x86:
 				case 0x87:
+					//---------for DAA
+					// to decimal
+					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					r_HL_decimal = (xx >> 4) * 10 + (xx & 0xF);
+					a_decimal = a_decimal + r_HL_decimal;
+					//----------------------
+					//cpu_cycles += 1;
 					//printf("add register to A\n", pc, sp);
 					prev_value = af.a;
 					af.a += (*idxToRegr_HL(opcode & 0x7));
@@ -968,8 +1029,18 @@ public:
 					break;
 
 
-					//add xx to A
+					//ADD xx to A
 				case 0xC6:
+					//---------for DAA
+					// to decimal
+					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
+					a_decimal = a_decimal + xx_decimal;
+					//----------------------
+					//cpu_cycles += 2;
 					//printf("add xx to A\n", pc, sp);
 					prev_value = af.a;
 					af.a += xx;
@@ -984,6 +1055,7 @@ public:
 				case 0x19:
 				case 0x29:
 				case 0x39:
+					//cpu_cycles += 2;
 					//printf("add BC DE HL SP to HL\n", pc, sp);
 					prev_value = af.a;
 					hl.all += (*idxToRegss((opcode & 0x30) >> 4));
@@ -995,6 +1067,7 @@ public:
 
 					//add xx to sp    
 				case 0xE8:
+					//cpu_cycles += 4;
 					//printf("add xx to sp\n", pc, sp);
 					prev_value = sp;
 					sp += (char)xx;
@@ -1023,6 +1096,7 @@ public:
 				case 0x2E:
 				case 0x36:
 				case 0x3E:
+					//cpu_cycles += 2;
 					pc += 2;
 					(*idxToRegr_HL((opcode >> 3) & 0x7)) = xx;
 					//printf("LD  %04X\n", xx);
@@ -1036,6 +1110,7 @@ public:
 				case 0x5E:
 				case 0x66:
 				case 0x6E:
+					//cpu_cycles += 2;
 					pc += 1;
 					(*idxToRegr_HL((opcode >> 3) & 0x7)) = memory[hl.all];
 					//printf("LD  %04X\n", memory[hl.all]);
@@ -1091,6 +1166,7 @@ public:
 				case 0x7C:
 				case 0x7D:
 				case 0x7F:
+					//cpu_cycles += 1;
 					pc += 1;
 					(*idxToRegr_HL((opcode >> 3) & 0x7)) = (*idxToRegr_HL(opcode & 0x7));
 					//printf("LD  %04X\n", (*idxToRegr_HL((opcode >> 3) & 0x7)));
@@ -1101,6 +1177,7 @@ public:
 				case 0x11:
 				case 0x21:
 				case 0x31:
+					//cpu_cycles += 3;
 					pc += 3;
 					(*idxToRegdd((opcode >> 4) & 0x3)) = aabb;
 					//printf("LD  \n");
@@ -1109,6 +1186,7 @@ public:
 
 					//load A with (BC)
 				case 0x0A:
+					//cpu_cycles += 2;
 					pc += 1;
 					af.a = memory[bc.c];
 					//printf("LD  \n");
@@ -1116,6 +1194,7 @@ public:
 
 					//load A with (DE)
 				case 0x1A:
+					//cpu_cycles += 2;
 					pc += 1;
 					af.a = memory[de.all];
 					//printf("LD  \n");
@@ -1123,6 +1202,7 @@ public:
 
 					//LD HLI load A with (HL++)
 				case 0x2A:
+					//cpu_cycles += 2;
 					pc += 1;
 					af.a = memory[hl.all++];
 					//printf("LDHLI  \n");
@@ -1130,29 +1210,32 @@ public:
 
 					//LD HLD load A with (HL--)
 				case 0x3A:
+					//cpu_cycles += 2;
 					pc += 1;
 					af.a = memory[hl.all--];
 					//printf("LDHLD  \n");
 					break;
 
-			
+
 					//LD HLI load (HL++) with A 
 				case 0x22:
+					//cpu_cycles += 2;
 					pc += 1;
 					memory[hl.all++] = af.a;
 					//printf("LD HLI load (HL++) with A  \n");
 					break;
-			
+
 					//LD HLD load(HL--) with A 
 				case 0x32:
+					//cpu_cycles += 2;
 					pc += 1;
 					memory[hl.all--] = af.a;
 					//printf("LD HLD load(HL--) with A   \n");
 					break;
 
-
 					//load A with (aabb)
 				case 0xFA:
+					//cpu_cycles += 4;
 					af.a = memory[aabb];
 					//printf("LD mempry[aabb] = %04X  \n",memory[aabb]);
 					pc += 3;
@@ -1160,6 +1243,7 @@ public:
 
 					//load HL with SP
 				case 0xF8:
+					//cpu_cycles += 2;
 					prev_value = hl.all;
 					hl.all = sp + (char)xx;
 					af.f_n = 0;
@@ -1167,9 +1251,9 @@ public:
 					if (((char)xx) > 0)
 					{
 						af.f_h = ((prev_value & 0xFFF) < (hl.all & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value < hl.all ) ? 1 : 0;
+						af.f_c = (prev_value < hl.all) ? 1 : 0;
 					}
-					else if (((char)xx) < 0) 
+					else if (((char)xx) < 0)
 					{
 						af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
 						af.f_c = (prev_value > hl.all) ? 1 : 0;
@@ -1180,6 +1264,7 @@ public:
 
 					//load SP with HL
 				case 0xF9:
+					//cpu_cycles += 2;
 					sp = hl.all;
 					pc += 1;
 					//printf("load SP with HL  \n");
@@ -1193,6 +1278,7 @@ public:
 				case 0x73:
 				case 0x74:
 				case 0x75:
+					//cpu_cycles += 2;
 					//printf("load (HL) with reg  \n");
 					pc += 1;
 					memory[hl.all] = (*idxToRegr_HL(opcode & 0x7));
@@ -1200,6 +1286,7 @@ public:
 
 					//load (aabb) with A
 				case 0xEA:
+					//cpu_cycles += 4;
 					memory[aabb] = af.a;
 					pc += 3;
 					//printf("load (aabb) with A  \n");
@@ -1207,6 +1294,7 @@ public:
 
 					//load (aabb) with sp
 				case 0x08:
+					//cpu_cycles += 3;
 					//printf("load (aabb) with sp  \n");
 					memory[aabb] = sp & 0xFF;
 					memory[aabb + 1] = (sp >> 8) & 0xFF;
@@ -1215,61 +1303,64 @@ public:
 
 					//load (0xFF00 + xx) with A
 				case 0xE0:
+					//cpu_cycles += 3;
 					//printf("load (xx) with A  \n");
 					memory[PERIPHERAL_BASE + xx] = af.a;
-				
 					pc += 2;
 					//debug ,simulate interrupt
-				
+
 					/*if((pc == 0x2BE))
-					{					
-						if(bhere--)
-						{
-							memory[--sp] = (pc-2) >> 8;
-							memory[--sp] = (pc-2) & 0xFF;
-							memory[0xFFCE] = 0;
-							memory[0xFF98] = 0;
-							memory[0xFFE3] = 0;
+					{
+					if(bhere--)
+					{
+					memory[--sp] = (pc-2) >> 8;
+					memory[--sp] = (pc-2) & 0xFF;
+					memory[0xFFCE] = 0;
+					memory[0xFF98] = 0;
+					memory[0xFFE3] = 0;
 
-							memory[0xFFB6] = 0x3E;
-							memory[0xFFB7] = 0xC0;
-							memory[0xFFB8] = 0xE0;
-							memory[0xFFB9] = 0x46;
-							memory[0xFFBA] = 0x3E;
-							memory[0xFFBB] = 0x28;
-							memory[0xFFBC] = 0x3D;
-							memory[0xFFBD] = 0x20;
-							memory[0xFFBE] = 0xFD;
-							memory[0xFFBF] = 0xC9;
-							memory[0xFFC0] = 0x37;
-							memory[0xFFC1] = 0x1C;
-							memory[0xFFE1] = 0x24;
+					memory[0xFFB6] = 0x3E;
+					memory[0xFFB7] = 0xC0;
+					memory[0xFFB8] = 0xE0;
+					memory[0xFFB9] = 0x46;
+					memory[0xFFBA] = 0x3E;
+					memory[0xFFBB] = 0x28;
+					memory[0xFFBC] = 0x3D;
+					memory[0xFFBD] = 0x20;
+					memory[0xFFBE] = 0xFD;
+					memory[0xFFBF] = 0xC9;
+					memory[0xFFC0] = 0x37;
+					memory[0xFFC1] = 0x1C;
+					memory[0xFFE1] = 0x24;
 
 
-							memory[0xFF00] = 0xEF;
+					memory[0xFF00] = 0xEF;
 
-							pc = 0x17E;
-						}
+					pc = 0x17E;
+					}
 					}*/
 
 					break;
-				
+
 					//load (0xFF00 + C) with A
 				case 0xE2:
+					//cpu_cycles += 2;
 					//printf("load (C) with A  \n");
 					memory[PERIPHERAL_BASE + bc.c] = af.a;
 					pc += 1;
 					break;
-				
+
 					//load A with (0xFF00 + xx)
 				case 0xF0:
+					//cpu_cycles += 3;
 					pc += 2;
 					af.a = memory[PERIPHERAL_BASE + xx];
 					//printf("LD	\n");
 					break;
-			
+
 					//load A with (0xFF00 + C)
 				case 0xF2:
+					//cpu_cycles += 2;
 					pc += 1;
 					af.a = memory[PERIPHERAL_BASE + bc.c];
 					//printf("LD	\n");
@@ -1280,22 +1371,23 @@ public:
 					//printf("load (BC) with A  \n");
 					memory[bc.all] = af.a;
 					pc += 1;
+					//cpu_cycles += 2;
 					break;
 
 					//load (DE) with A
 				case 0x12:
+					//cpu_cycles += 2;
 					//printf("load (DE) with A  \n");
 					memory[de.all] = af.a;
 					pc += 1;
 					break;
-
-
 
 					//POP AF,BC,DE,HL
 				case 0xF1:
 				case 0xC1:
 				case 0xD1:
 				case 0xE1:
+					//cpu_cycles += 3;
 					(*idxToRegqq((opcode >> 4) & 0x3)) = (memory[sp + 1] << 8) | memory[sp];
 					pc += 1;
 					sp += 2;
@@ -1307,13 +1399,14 @@ public:
 				case 0xC5:
 				case 0xD5:
 				case 0xE5:
+					//cpu_cycles += 3;
 					memory[--sp] = (*idxToRegqq((opcode >> 4) & 0x3)) >> 8;
 					memory[--sp] = (*idxToRegqq((opcode >> 4) & 0x3)) & 0xFF;
 					pc += 1;
 					//printf("push  %04X\n", sp);
 					break;
 
-					//ADC  add reg..(HL) + flag_carry to A
+					//ADC  add A,B..(HL) + flag_carry to A
 				case 0x88:
 				case 0x89:
 				case 0x8A:
@@ -1322,6 +1415,16 @@ public:
 				case 0x8D:
 				case 0x8E:
 				case 0x8F:
+					//---------for DAA
+					// to decimal
+					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
+					a_decimal = a_decimal + r_HL_decimal + af.f_c;
+					//----------------------
+					//cpu_cycles += 1;
 					prev_value = af.a;
 					af.a = (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
 					af.f_c = (prev_value > af.a) ? 1 : 0;
@@ -1334,9 +1437,19 @@ public:
 
 					//ADC add xx + flag_carry to A
 				case 0xCE:
+					//---------for DAA
+					// to decimal
+					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
+					a_decimal = a_decimal + xx_decimal + af.f_c;
+					//----------------------
+					//cpu_cycles += 1;
 					prev_value = af.a;
-					af.a = xx + af.f_c;
-					pc += 2;				
+					af.a += (xx + af.f_c);
+					pc += 2;
 					af.f_c = (prev_value > af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
@@ -1346,6 +1459,7 @@ public:
 
 					//CCF clear carry flag
 				case 0x3F:
+					//cpu_cycles += 1;
 					af.f_c = 0;
 					pc += 1;
 					//printf("CCF  %04X\n", af.all);
@@ -1353,22 +1467,23 @@ public:
 
 					//SCF set carry flag
 				case 0x37:
+					//cpu_cycles += 1;
 					af.f_c = 1;
 					pc += 1;
 					//printf("SCF  %04X\n", af.all);
 					break;
 
-
 					//AND xx
 				case 0xE6:
-					pc += 2;				
+					//cpu_cycles += 1;
+					pc += 2;
 					af.a &= xx;
 					af.f_c = 0;
 					af.f_h = 1;
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					break;
-				
+
 					//AND A,B..(HL)
 				case 0xA0:
 				case 0xA1:
@@ -1378,6 +1493,7 @@ public:
 				case 0xA5:
 				case 0xA6:
 				case 0xA7:
+					//cpu_cycles += 1;
 					af.a &= (*idxToRegr_HL(opcode & 0x7));
 					af.f_c = 0;
 					af.f_h = 1;
@@ -1396,6 +1512,7 @@ public:
 				case 0xBB:
 				case 0xBC:
 				case 0xBD:
+					//cpu_cycles += 1;
 					pc += 1;
 					af.f_c = (*idxToRegr_HL(opcode & 0x7) > af.a) ? 1 : 0;
 					af.f_h = ((*idxToRegr_HL(opcode & 0x7) & 0xF) > (af.a & 0xF)) ? 1 : 0;
@@ -1406,6 +1523,7 @@ public:
 
 					//compare A xx	
 				case 0xFE:
+					//cpu_cycles += 1;
 					af.f_c = (xx > af.a) ? 1 : 0;
 					af.f_h = ((xx & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 1;
@@ -1416,6 +1534,7 @@ public:
 
 					//CPL complement A	
 				case 0x2F:
+					//cpu_cycles += 1;
 					af.f_h = 1;
 					af.f_n = 1;
 					af.a = ~af.a;
@@ -1425,32 +1544,21 @@ public:
 
 					//DAA decimal adjust A
 				case 0x27:
+					printREG();
+					//cpu_cycles += 1;
 					if (af.f_n)//substract
 					{
-						if (((af.a & 0xF0) > 0x90) || (af.f_c))
-						{
-							af.f_c = 1;
-							af.a -= 0x60;
-						}
-						if (((af.a & 0xF) > 0x9) || (af.f_h))
-						{
-							af.f_h = 1;
-							af.a -= 0x60;
-						}
+						af.a = (((a_decimal % 100) / 10) << 4) | (a_decimal % 10);
 					}
 					else//addition
 					{
-						if (((af.a & 0xF0) > 0x90) || (af.f_c))
-						{
-							af.f_c = 1;
-							af.a += 0x60;
-						}
-						if (((af.a & 0xF) > 0x9) || (af.f_h))
-						{
-							af.f_h = 1;
-							af.a += 0x60;
-						}
+						af.f_c = (a_decimal >= 100) ? 1 : 0;
+						af.a = (((a_decimal % 100) / 10) << 4) | (a_decimal % 10);
 					}
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					af.f_z = (af.a == 0) ? 1 : 0;
+					af.f_h = 0;
 					//printf("DAA  %04X\n", af.a);
 					pc += 1;
 					break;
@@ -1464,6 +1572,7 @@ public:
 				case 0x2D:
 				case 0x35:
 				case 0x3D:
+					//cpu_cycles += 1;
 					prev_value = (*idxToRegr_HL((opcode >> 3) & 0x7));
 					(*idxToRegr_HL((opcode >> 3) & 0x7))--;
 					reg_value = (*idxToRegr_HL((opcode >> 3) & 0x7));
@@ -1479,6 +1588,7 @@ public:
 				case 0x1B:
 				case 0x2B:
 				case 0x3B:
+					//cpu_cycles += 2;
 					(*idxToRegss((opcode >> 4) & 0x3))--;
 					pc += 1;
 					//printf("DEC  %04X\n", (*idxToRegss((opcode >> 4) & 0x3)));
@@ -1486,28 +1596,31 @@ public:
 
 					//DI disable interrupt
 				case 0xF3:
+					//cpu_cycles += 1;
 					pc += 1;
 					//printf("pc = 0x%X ", pc);
 					ime = false;
-					//printf("DI cpu_cycles = %08X\n", cpu_cycles);
+					//printf("DI //cpu_cycles = %08X\n", //cpu_cycles);
 					break;
 
 					//EI enable interrupt
 				case 0xFB:
+					//cpu_cycles += 1;
 					//printf("pc = 0x%X ", pc);
 					pc += 1;
 					ime = true;
-					//printf("EI cpu_cycles = %08X\n", cpu_cycles);
+					//printf("EI //cpu_cycles = %08X\n", //cpu_cycles);
 					break;
 
 					//halt
 					//if IME is true -> go to isr upon interrupt occuring
 					//if IME is false -> starts from pc
 				case 0x76:
+					//cpu_cycles += 1;
 					halt_state = TRUE;
 					//outputBinary("videoram.bin", 0x8000, 0x2000);
 					pc += 1;
-					//printf("cpu_cycles = %08X ,halt_state = TRUE\n", cpu_cycles);
+					//printf("//cpu_cycles = %08X ,halt_state = TRUE\n", //cpu_cycles);
 					break;
 
 					//increment A B..L (HL) by 1 		
@@ -1519,6 +1632,7 @@ public:
 				case 0x2C:
 				case 0x34:
 				case 0x3C:
+					//cpu_cycles += 2;
 					prev_value = (*idxToRegr_HL((opcode >> 3) & 0x7));
 					(*idxToRegr_HL((opcode >> 3) & 0x7))++;
 					reg_value = (*idxToRegr_HL((opcode >> 3) & 0x7));
@@ -1526,9 +1640,9 @@ public:
 					af.f_n = 0;
 					af.f_z = (reg_value == 0) ? 1 : 0;
 					pc += 1;
-					if(opcode == 0x34 && hl.all == 0xFFE2)
+					if (opcode == 0x34 && hl.all == 0xFFE2)
 					{
-						//printf("cpu_cycles :%08X , pc %02X : INC  %04X\n", cpu_cycles , pc,(*idxToRegr_HL((opcode >> 3) & 0x7)));
+						//printf("//cpu_cycles :%08X , pc %02X : INC  %04X\n", //cpu_cycles , pc,(*idxToRegr_HL((opcode >> 3) & 0x7)));
 					}
 					break;
 
@@ -1537,6 +1651,7 @@ public:
 				case 0x13:
 				case 0x23:
 				case 0x33:
+					//cpu_cycles += 2;
 					(*idxToRegss((opcode >> 4) & 0x3))++;
 					pc += 1;
 					//printf("INC  %04X\n", (*idxToRegss((opcode >> 4) & 0x3)));
@@ -1544,6 +1659,7 @@ public:
 
 					//OR A with xx
 				case 0xF6:
+					//cpu_cycles += 1;
 					af.a |= xx;
 					af.f_c = 0;
 					af.f_h = 0;
@@ -1562,6 +1678,7 @@ public:
 				case 0xB5:
 				case 0xB6:
 				case 0xB7:
+					//cpu_cycles += 1;
 					af.a |= (*idxToRegr_HL(opcode & 0x7));
 					af.f_c = 0;
 					af.f_h = 0;
@@ -1573,6 +1690,7 @@ public:
 
 				case 0xCB:
 					//RLC
+					//cpu_cycles += 2;
 					if (xx <= 0x07)
 					{
 						af.f_c = (*idxToRegr_HL(xx & 0x7)) & 0x80 ? 1 : 0;
@@ -1613,7 +1731,7 @@ public:
 						prev_value = af.f_c;
 						af.f_c = (*idxToRegr_HL(xx & 0x7)) & 0x01 ? 1 : 0;
 						(*idxToRegr_HL(xx & 0x7)) >>= 1;
-						(*idxToRegr_HL(xx & 0x7)) |= (prev_value << 8);
+						(*idxToRegr_HL(xx & 0x7)) |= (prev_value << 7);
 						reg_value = (*idxToRegr_HL(xx & 0x7));
 						af.f_h = 0;
 						af.f_n = 0;
@@ -1692,7 +1810,7 @@ public:
 					else
 					{
 						//printf("unknown opcode xx = %02X\n",xx);
-						while(1);
+						while (1);
 					}
 					pc += 2;
 					break;
@@ -1701,11 +1819,15 @@ public:
 				case 0xC0:
 					if (!af.f_z)
 					{
+						//cpu_cycles += 4;
 						pc = (memory[sp + 1] << 8) | memory[sp];
 						sp += 2;
 					}
 					else
+					{
+						//cpu_cycles += 2;
 						pc += 1;
+					}
 					//printf("RET NZ = %04X\n", pc);
 					break;
 
@@ -1713,11 +1835,15 @@ public:
 				case 0xC8:
 					if (af.f_z)
 					{
+						//cpu_cycles += 4;
 						pc = (memory[sp + 1] << 8) | memory[sp];
 						sp += 2;
 					}
 					else
+					{
+						//cpu_cycles += 2;
 						pc += 1;
+					}
 					//printf("RET Z = %04X\n", pc);
 					break;
 
@@ -1725,11 +1851,15 @@ public:
 				case 0xD0:
 					if (!af.f_c)
 					{
+						//cpu_cycles += 4;
 						pc = (memory[sp + 1] << 8) | memory[sp];
 						sp += 2;
 					}
 					else
+					{
+						//cpu_cycles += 2;
 						pc += 1;
+					}
 					//printf("RET NC pc = %04X\n", pc);
 					break;
 
@@ -1737,16 +1867,21 @@ public:
 				case 0xD8:
 					if (af.f_c)
 					{
+						//cpu_cycles += 4;
 						pc = (memory[sp + 1] << 8) | memory[sp];
 						sp += 2;
 					}
 					else
+					{
+						//cpu_cycles += 2;
 						pc += 1;
+					}
 					//printf("RET C pc = %04X\n", pc);
 					break;
 
 					//RET	  
 				case 0xC9:
+					//cpu_cycles += 4;
 					pc = (memory[sp + 1] << 8) | memory[sp];
 					sp += 2;
 					//printf("RET pc = %04X\n", pc);
@@ -1756,6 +1891,7 @@ public:
 
 					//RETI	  
 				case 0xD9:
+					//cpu_cycles += 4;
 					//printf("RETI \r\n");
 					pc = (memory[sp + 1] << 8) | memory[sp];
 					sp += 2;
@@ -1765,6 +1901,7 @@ public:
 
 					//RLA
 				case 0x17:
+					//cpu_cycles += 1;
 					pc += 1;
 					prev_value = af.f_c;
 					af.f_c = af.a & 0x80 ? 1 : 0;
@@ -1776,10 +1913,10 @@ public:
 					//printf("RLA af.a << 1 = %04X\n", af.a);
 					break;
 
-
 					//RLCA
 				case 0x07:
-					pc += 2;
+					//cpu_cycles += 1;
+					pc += 1;
 					af.f_c = af.a & 0x80 ? 1 : 0;
 					af.f_h = 0;
 					af.f_n = 0;
@@ -1788,24 +1925,24 @@ public:
 					//printf("RLCA af.a << 1 = %04X\n", af.a);
 					break;
 
-
 					//RRA
 				case 0x1F:
-					pc += 2;
+					//cpu_cycles += 1;
+					pc += 1;
 					prev_value = af.f_c;
 					af.f_c = af.a & 0x01 ? 1 : 0;
 					af.f_h = 0;
 					af.f_n = 0;
 					af.f_z = 0;
 					af.a >>= 1;
-					af.a |= (prev_value << 8);
+					af.a |= (prev_value << 7);
 					//printf("RRA af.a >> 1 = %04X\n", af.a);
 					break;
 
-
 					//RRCA
 				case 0x0F:
-					pc += 2;
+					//cpu_cycles += 1;
+					pc += 1;
 					af.f_c = af.a & 0x01 ? 1 : 0;
 					af.f_h = 0;
 					af.f_n = 0;
@@ -1816,6 +1953,16 @@ public:
 
 					//SBC subtract xx+cy from A
 				case 0xDE:
+					//---------for DAA
+					// to decimal
+					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
+					a_decimal = a_decimal - xx_decimal - af.f_c;
+					//----------------------
+					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, xx, af.f_c);
 					pc += 2;
 					prev_value = af.a;
@@ -1824,7 +1971,7 @@ public:
 					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 1;
 					af.f_z = (af.a == 0) ? 1 : 0;
-				
+
 					break;
 
 					//SBC subtract reg+cy from A
@@ -1836,10 +1983,20 @@ public:
 				case 0x9D:
 				case 0x9E:
 				case 0x9F:
+					//---------for DAA
+					// to decimal
+					a_decimal    = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
+					a_decimal = a_decimal - r_HL_decimal - af.f_c;
+					//----------------------
+					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)), af.f_c);
 					pc += 2;
 					reg_value = (*idxToRegr_HL(opcode & 0x7));
-					carry     = af.f_c;
+					carry = af.f_c;
 					af.f_h = (((reg_value + carry) & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					af.f_c = ((reg_value + carry) > af.a) ? 1 : 0;
 					af.a = af.a - af.f_c - reg_value;
@@ -1856,6 +2013,16 @@ public:
 				case 0x95:
 				case 0x96:
 				case 0x97:
+					//---------for DAA
+					// to decimal
+					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					r_HL_decimal = ((*idxToRegr_HL(opcode & 0x7)) >> 4) * 10 + ((*idxToRegr_HL(opcode & 0x7)) & 0xF);
+					a_decimal = a_decimal - r_HL_decimal;
+					//----------------------
+					//cpu_cycles += 1;
 					//printf("%04X sub %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)));
 					pc += 1;
 					af.f_c = ((*idxToRegr_HL(opcode & 0x7)) > af.a) ? 1 : 0;
@@ -1867,13 +2034,33 @@ public:
 
 					//SUB xx
 				case 0xD6:
+					//---------for DAA
+					// to decimal
+					a_decimal = (af.a >> 4) * 10 + (af.a & 0xF);
+					printREG();
+					printf("a_decimal = %03d\n", a_decimal);
+					printf("af.a      = %03X\n", af.a);
+					xx_decimal = (xx >> 4) * 10 + (xx & 0xF);
+					a_decimal = a_decimal - xx_decimal;
+					//----------------------
+					//cpu_cycles += 1;
 					//printf("%04X sub %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)));
 					pc += 2;
 					af.f_c = (xx > af.a) ? 1 : 0;
-					af.f_h =  ((xx & 0xF) > (af.a & 0xF)) ? 1 : 0;
-					af.a -= (*idxToRegr_HL(opcode & 0x7));
+					af.f_h = ((xx & 0xF) > (af.a & 0xF)) ? 1 : 0;
+					af.a -= xx;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					af.f_n = 1;
+					break;
+
+					//XOR
+				case 0xEE:
+					pc += 2;					
+					af.a = xx ^ af.a;
+					af.f_z = (af.a == 0) ? 1 : 0;
+					af.f_n = 0;
+					af.f_c = 0;
+					af.f_h = 0;
 					break;
 
 					//XOR
@@ -1885,6 +2072,7 @@ public:
 				case 0xAD:
 				case 0xAE:
 				case 0xAF:
+					//cpu_cycles += 1;
 					//printf("%04X xor %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)));
 					pc += 1;
 					af.a = (*idxToRegr_HL(opcode & 0x7)) ^ af.a;
@@ -1899,8 +2087,10 @@ public:
 
 				}
 
-			
-			//getchar();
+				//reserved field in af.f should be zero, in case previous code changed the value, we need to clear it  after every cycle
+				af.all &= 0xFFF0;
+
+				//getchar();
 			}
 		}
 	}
@@ -1945,15 +2135,15 @@ U8DATA &U8DATA::operator=(U8 val)
 
 		break;
 	}
-	
+
 	U16 bg_tile_ram_end_eddr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
 	if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_eddr)))
-	//if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
+		//if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
 	{
 		//we need to collect two byte before painting one row
 		if ((access_addr & 0x1) == 0x1)
 		{
-			if (val) 
+			if (val)
 			{
 				//printf("access_addr = %04X\n", access_addr);
 				//printf("%02X %02X\n", (U8)(cpu->memory[access_addr - 1]), val);
@@ -1961,7 +2151,7 @@ U8DATA &U8DATA::operator=(U8 val)
 			tile_dot_data_painter->paintTileDotData(access_addr, (U8)(cpu->memory[access_addr - 1]), val);
 		}
 	}
-	
+
 
 	if (access_addr == 0xFF00)
 	{
