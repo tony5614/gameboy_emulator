@@ -22,8 +22,9 @@ typedef unsigned short U16;
 #define 	JOY_PAD_RESET          (BIT(4)|BIT(5))
 #define 	JOY_PAD_SEL_BUTTON     BIT(4)
 #define 	JOY_PAD_SEL_DIRECT     BIT(5)
-#define TIMER_ADDR             (0xFF06)	//TMA timer
-#define TIMER_CTRL_ADDR        (0xFF07) //TAC timer control
+#define TIMA                   (0xFF05)	//timer counter
+#define TMA                    (0xFF06)	//timer modulo
+#define TAC                    (0xFF07) // timer control
 #define LCD_CTRL_REG           (0xFF40) //LCDC
 #define 	BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
 #define 	BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
@@ -364,6 +365,7 @@ private:
 
 									   //emulator flag
 	U8               halt_state;
+	U8               stop_state;
 	void*            tile_buf_ptr;
 	void*            viewport_buf_ptr;
 	SYSTEMTIME       begin_time;
@@ -726,6 +728,24 @@ public:
 			}
 		}
 	}
+	void update_timer()
+	{
+		U16 input_clk_sel = memory[TAC] & 0x3;
+		input_clk_sel = (input_clk_sel == 0) ? 4 : input_clk_sel; // 0 -> 4
+
+		// 0b00 -> freq / 2^10
+		// 0b01 -> freq / 2^4
+		// 0b10 -> freq / 2^6
+		// 0b11 -> freq / 2^8
+		U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
+
+		if ((cpu_cycles & timer_mod_mask) == 0)
+		{
+			memory[TIMA] = memory[TIMA] + 1;
+			//printf("timer int cpu_cycles = %X, ", cpu_cycles);
+			//printf(" memory[TIMA] = %X\n", (U8)(memory[TIMA]));
+		}
+	}
 	void check_interrupt_and_dispatch_isr()
 	{
 		//
@@ -733,7 +753,7 @@ public:
 		//memory[INT_SWITCH_BASE];
 
 		//not need to clear int flag, programmer would clear flag before using it
-		//vertical blanking interupt
+		//vertical blanking interupt ISR = 0x40
 		if (memory[LCD_Y_COORD_REG] == 0)
 		{
 			//wake from halt_state
@@ -754,6 +774,32 @@ public:
 				pc = ISR_VERTICAL_BLANKING;
 				//clear flag if the interrupt is served by isr
 				memory[INT_SWITCH] = memory[INT_SWITCH] & (~INT_FLAG_VERT_BLANKING);
+			}
+		}
+
+		//vertical blanking interupt ISR = 0x50
+		if (memory[TIMA] == 0xFF)
+		{
+			//wake from halt_state
+			halt_state = FALSE;
+
+			//set int flag
+			memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_TIMER);
+
+			//When TIMA overflows, the TMA data is loaded into TIMA
+			memory[TIMA] = memory[TMA];
+
+			if (ime)
+			{
+				ime = FALSE;
+				memory[--sp] = pc >> 8;
+				memory[--sp] = pc & 0xFF;
+				pc = ISR_TIMER;
+				//clear flag if the interrupt is served by isr
+				memory[INT_SWITCH] = memory[INT_SWITCH] & (~INT_FLAG_TIMER);
+
+
+				//printf("goto isr = %X\n", pc);
 			}
 		}
 
@@ -785,10 +831,6 @@ public:
 		U8    carry;
 		U8    bhere = 1;
 		U8    ly = memory[LCD_Y_COORD_REG];
-		//for DAA
-		U8    a_decimal;
-		U8    xx_decimal;
-		U8    r_HL_decimal;
 
 		U8    _debug = true;		
 		U8 showpc = 0;
@@ -796,8 +838,16 @@ public:
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
+			//STOP instruction takes the highest priority
+			//if stop_state is met, do not do any action
+			//if (stop_state == TRUE) 
+			//{
+			//	continue;
+			//}
 			cpu_cycles++;
 			update_lcd_y_coord();
+			update_timer();
+
 			check_interrupt_and_dispatch_isr();
 
 			if ((this->refresh_lcd == TRUE))
@@ -823,11 +873,20 @@ public:
 				ly = memory[LCD_Y_COORD_REG];
 
 				//printf("opcode = %04X, clk = %d , pc = %04X\n", opcode, cpu_cycles, pc);
+				if (opcode == 0x36 || opcode == 0x06 || opcode == 0x0E || opcode == 0x16 || opcode == 0x1E || opcode == 0x26 || opcode == 0x2E || opcode == 0x3E || opcode == 0xF6 || opcode == 0xFE || opcode == 0xC6 || opcode == 0xCE || opcode == 0xD6 || opcode == 0xDE || opcode == 0xE6 || opcode == 0xEE)
+				{
+					//printf("pc = %04X , opcode = %02X, xx = %02X\n", pc, opcode, xx);
+				}
 
 				if(showpc)
 					printREG();
 				switch (opcode)
 				{
+					//STOP
+				case 0x10:
+					pc += 2;
+					break;
+
 				case 0xC3:
 					pc = aabb;
 					//cpu_cycles += 4;
@@ -1024,11 +1083,11 @@ public:
 				case 0xC6:
 					//cpu_cycles += 2;
 					//printf("add xx to A\n", pc, sp);
-					prev_value = af.a;
+					af.f_c = ((af.a + xx) > 0xFF) ? 1 : 0;
+					af.f_h = (((af.a & 0xF) + (xx & 0xF))  > 0xF) ? 1 : 0;
 					af.a += xx;
+					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
-					af.f_c = (prev_value > af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					pc += 2;
 					break;
 
@@ -1410,8 +1469,8 @@ public:
 					prev_value = af.a;
 					af.a += (xx + af.f_c);
 					pc += 2;
-					af.f_c = (prev_value > af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
+					af.f_c = (prev_value >= af.a) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					//printf("ADC  %04X\n", af.a);
@@ -1481,7 +1540,7 @@ public:
 					//printf("CP  %04X\n", af.a);
 					break;
 
-					//compare A xx	
+					//CP compare A xx	
 				case 0xFE:
 					//cpu_cycles += 1;
 					af.f_c = (xx > af.a) ? 1 : 0;
@@ -1919,8 +1978,8 @@ public:
 					pc += 2;
 					prev_value = af.a;
 					af.a = af.a - af.f_c - xx;
-					af.f_c = (prev_value > af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
+					af.f_c = (prev_value >= af.a) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 1;
 					af.f_z = (af.a == 0) ? 1 : 0;
 
@@ -2036,9 +2095,12 @@ U8DATA &U8DATA::operator=(U8 val)
 	case 0xFF01:
 	case 0xFF02:
 	case 0xFF04:
-	case 0xFF05:
-	case 0xFF06:
-	case 0xFF07:
+		break;
+	//case TIMA:		//0xFF05
+	//case TMA:		//0xFF06
+	case TAC:		//0xFF07
+		//timer emable
+		break;
 		//case 0xFF0F:
 	case 0xFF40:
 	case 0xFF41:
