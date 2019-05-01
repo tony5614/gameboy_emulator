@@ -400,23 +400,25 @@ public:
 		refresh_lcd = FALSE;
 		
 
-
+		/*
 		sp = STACK_BEGIN_ADDR;
 		pc = 0x100;
 		af.all = 0x1100;
 		bc.all = 0x0000;
 		de.all = 0x0000;
 		hl.all = 0x0000;
-		ime = TRUE;
+		ime = TRUE;*/
+		
 
 		//main program start
 		//tetris rom initial state
-		//sp = STACK_BEGIN_ADDR;
-		//pc = 0x150;
-		//af.all = 0x01B0;
-		//bc.all = 0x0013;
-		//de.all = 0x00D8;
-		//hl.all = 0x014D;
+		sp = STACK_BEGIN_ADDR;
+		pc = 0x150;
+		af.all = 0x01B0;
+		bc.all = 0x0013;
+		de.all = 0x00D8;
+		hl.all = 0x014D;
+		
 
 		//quick debug from
 		//sp = 0xCFFF;
@@ -439,7 +441,7 @@ public:
 	}
 	inline	void printREG()
 	{
-		printf("A:%02X F:%02X\n", af.a, af.all & 0xFF);
+		printf("A:%02X F:%02X   z:%d  n:%d  h:%d  c:%d \n", af.a, af.all & 0xFF, af.f_z, af.f_n, af.f_h, af.f_c);
 		printf("B:%02X C:%02X\n", bc.b, bc.c);
 		printf("D:%02X E:%02X\n", de.d, de.e);
 		printf("H:%02X L:%02X\n", hl.h, hl.l);
@@ -834,7 +836,7 @@ public:
 
 		U8    _debug = true;		
 		U8 showpc = 0;
-
+		U16 debug_pc = 0xc00a;
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
@@ -872,10 +874,10 @@ public:
 
 				ly = memory[LCD_Y_COORD_REG];
 
-				//printf("opcode = %04X, clk = %d , pc = %04X\n", opcode, cpu_cycles, pc);
-				if (opcode == 0x36 || opcode == 0x06 || opcode == 0x0E || opcode == 0x16 || opcode == 0x1E || opcode == 0x26 || opcode == 0x2E || opcode == 0x3E || opcode == 0xF6 || opcode == 0xFE || opcode == 0xC6 || opcode == 0xCE || opcode == 0xD6 || opcode == 0xDE || opcode == 0xE6 || opcode == 0xEE)
+
+				if (debug_pc == pc)
 				{
-					//printf("pc = %04X , opcode = %02X, xx = %02X\n", pc, opcode, xx);
+					//printf("hit %0x4X\n", debug_pc);
 				}
 
 				if(showpc)
@@ -1073,7 +1075,7 @@ public:
 					af.a += (*idxToRegr_HL(opcode & 0x7));
 					af.f_c = (prev_value > af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
-					af.f_h = 0;
+					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					pc += 1;
 					break;
@@ -1098,9 +1100,10 @@ public:
 				case 0x39:
 					//cpu_cycles += 2;
 					//printf("add BC DE HL SP to HL\n", pc, sp);
-					prev_value = af.a;
+					prev_value = hl.all;
 					hl.all += (*idxToRegss((opcode & 0x30) >> 4));
-					af.f_z = (hl.all == 0) ? 1 : 0;
+					//af.f_z = (hl.all == 0) ? 1 : 0;
+					af.f_n = 0;
 					af.f_c = (prev_value > hl.all) ? 1 : 0;
 					af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
 					pc += 1;
@@ -1109,21 +1112,22 @@ public:
 					//add xx to sp    
 				case 0xE8:
 					//cpu_cycles += 4;
-					//printf("add xx to sp\n", pc, sp);
+					//printf("add 0x%02X to 0x%04X\n", xx, sp);
 					prev_value = sp;
 					sp += (char)xx;
 					af.f_n = 0;
 					af.f_z = 0;
 					if (((char)xx) > 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) < (sp & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value < sp) ? 1 : 0;
-					}
-					else if (((char)xx) < 0)
-					{
 						af.f_h = ((prev_value & 0xFFF) > (sp & 0xFFF)) ? 1 : 0;
 						af.f_c = (prev_value > sp) ? 1 : 0;
 					}
+					else if (((char)xx) < 0)
+					{
+						af.f_h = ((prev_value & 0xFFF) < (sp & 0xFFF)) ? 1 : 0;
+						af.f_c = (prev_value < sp) ? 1 : 0;
+					}
+					//printREG();
 					pc += 2;
 					break;
 
@@ -1282,22 +1286,22 @@ public:
 					pc += 3;
 					break;
 
-					//load HL with SP
+					//LDHL load HL with SP + e
 				case 0xF8:
 					//cpu_cycles += 2;
-					prev_value = hl.all;
+					prev_value = sp;
 					hl.all = sp + (char)xx;
 					af.f_n = 0;
 					af.f_z = 0;
 					if (((char)xx) > 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) < (hl.all & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value < hl.all) ? 1 : 0;
+						af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
+						af.f_c = (prev_value > hl.all) ? 1 : 0;
 					}
 					else if (((char)xx) < 0)
 					{
 						af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value > hl.all) ? 1 : 0;
+						af.f_c = (prev_value < hl.all) ? 1 : 0;
 					}
 					pc += 2;
 					//printf("load HL with SP  \n");
@@ -1454,7 +1458,7 @@ public:
 				case 0x8F:
 					//cpu_cycles += 1;
 					prev_value = af.a;
-					af.a = (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
+					af.a = af.a + (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
 					af.f_c = (prev_value > af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
@@ -1479,7 +1483,9 @@ public:
 					//CCF clear carry flag
 				case 0x3F:
 					//cpu_cycles += 1;
-					af.f_c = 0;
+					af.f_c = !af.f_c;
+					af.f_h = 0;
+					af.f_n = 0;
 					pc += 1;
 					//printf("CCF  %04X\n", af.all);
 					break;
@@ -1488,6 +1494,8 @@ public:
 				case 0x37:
 					//cpu_cycles += 1;
 					af.f_c = 1;
+					af.f_h = 0;
+					af.f_n = 0;
 					pc += 1;
 					//printf("SCF  %04X\n", af.all);
 					break;
@@ -2076,6 +2084,8 @@ public:
 
 				//getchar();
 			}
+
+
 		}
 	}
 
