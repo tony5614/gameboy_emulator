@@ -1769,7 +1769,7 @@ public:
 					//SET
 					else if ((0xC0 <= xx) && (xx <= 0xFF))
 					{
-						(*idxToRegr_HL(xx & 0x7)) &= BIT(b);
+						(*idxToRegr_HL(xx & 0x7)) |= BIT(b);
 						//printf("SET = %04X\n", (*idxToRegr_HL(xx & 0x7)));
 					}
 					//SLA
