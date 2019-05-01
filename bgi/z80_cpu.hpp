@@ -400,24 +400,24 @@ public:
 		refresh_lcd = FALSE;
 		
 
-		/*
+		
 		sp = STACK_BEGIN_ADDR;
 		pc = 0x100;
 		af.all = 0x1100;
 		bc.all = 0x0000;
 		de.all = 0x0000;
 		hl.all = 0x0000;
-		ime = TRUE;*/
+		ime = TRUE;
 		
 
 		//main program start
 		//tetris rom initial state
-		sp = STACK_BEGIN_ADDR;
+		/*sp = STACK_BEGIN_ADDR;
 		pc = 0x150;
 		af.all = 0x01B0;
 		bc.all = 0x0013;
 		de.all = 0x00D8;
-		hl.all = 0x014D;
+		hl.all = 0x014D;*/
 		
 
 		//quick debug from
@@ -1459,8 +1459,8 @@ public:
 					//cpu_cycles += 1;
 					prev_value = af.a;
 					af.a = af.a + (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
-					af.f_c = (prev_value > af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) > (af.a & 0xF)) ? 1 : 0;
+					af.f_c = (prev_value >= af.a) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					pc += 1;
@@ -1721,12 +1721,12 @@ public:
 					//cpu_cycles += 2;
 					if (xx <= 0x07)
 					{
-						af.f_c = (*idxToRegr_HL(xx & 0x7)) & 0x80 ? 1 : 0;
+						af.f_c = ((*idxToRegr_HL(xx & 0x7)) & 0x80) ? 1 : 0;
 						(*idxToRegr_HL(xx & 0x7)) <<= 1;
-						reg_value = (*idxToRegr_HL(xx & 0x7));
+						(*idxToRegr_HL(xx & 0x7)) = (*idxToRegr_HL(xx & 0x7)) | af.f_c;
 						af.f_h = 0;
 						af.f_n = 0;
-						af.f_z = (reg_value == 0) ? 1 : 0;
+						af.f_z = ((*idxToRegr_HL(xx & 0x7)) == 0) ? 1 : 0;
 						//printf("RLC = %04X\n", (*idxToRegr_HL(xx & 0x7)));
 					}
 					//RRC
@@ -1734,10 +1734,10 @@ public:
 					{
 						af.f_c = (*idxToRegr_HL(xx & 0x7)) & 0x01 ? 1 : 0;
 						(*idxToRegr_HL(xx & 0x7)) >>= 1;
-						reg_value = (*idxToRegr_HL(xx & 0x7));
+						(*idxToRegr_HL(xx & 0x7)) = (af.f_c == 1) ? ((*idxToRegr_HL(xx & 0x7)) | BIT(7)) : (*idxToRegr_HL(xx & 0x7));
 						af.f_h = 0;
 						af.f_n = 0;
-						af.f_z = (reg_value == 0) ? 1 : 0;
+						af.f_z = ((*idxToRegr_HL(xx & 0x7)) == 0) ? 1 : 0;
 						//printf("RRC = %04X\n", (*idxToRegr_HL(xx & 0x7)));
 					}
 					//RL
@@ -1949,7 +1949,8 @@ public:
 					af.f_h = 0;
 					af.f_n = 0;
 					af.f_z = 0;
-					af.a <<= 1;
+					af.a = af.a << 1;
+					af.a = af.a | af.f_c;
 					//printf("RLCA af.a << 1 = %04X\n", af.a);
 					break;
 
@@ -1976,6 +1977,8 @@ public:
 					af.f_n = 0;
 					af.f_z = 0;
 					af.a >>= 1;
+					//if bit0==1 , bit7 should be set
+					af.a = (af.f_c) ? (af.a | BIT(7)) : af.a;
 					//printf("RRCA af.a >> 1 = %04X\n", af.a);
 					break;
 
@@ -2005,13 +2008,12 @@ public:
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)), af.f_c);
 					pc += 2;
-					reg_value = (*idxToRegr_HL(opcode & 0x7));
-					carry = af.f_c;
-					af.f_h = (((reg_value + carry) & 0xF) > (af.a & 0xF)) ? 1 : 0;
-					af.f_c = ((reg_value + carry) > af.a) ? 1 : 0;
-					af.a = af.a - af.f_c - reg_value;
-					af.f_z = (af.a == 0) ? 1 : 0;
+					prev_value = af.a;
+					af.a = af.a - (*idxToRegr_HL(opcode & 0x7)) - af.f_c ;					
+					af.f_h = ((af.a & 0xF) >= (prev_value & 0xF)) ? 1 : 0;
+					af.f_c = (af.a >= prev_value) ? 1 : 0;
 					af.f_n = 1;
+					af.f_z = (af.a == 0) ? 1 : 0;
 					break;
 
 					//SUB
@@ -2028,7 +2030,7 @@ public:
 					pc += 1;
 					af.f_c = ((*idxToRegr_HL(opcode & 0x7)) > af.a) ? 1 : 0;
 					af.f_h = (((*idxToRegr_HL(opcode & 0x7)) & 0xF) > (af.a & 0xF)) ? 1 : 0;
-					af.a -= (*idxToRegr_HL(opcode & 0x7));
+					af.a = af.a - (*idxToRegr_HL(opcode & 0x7));
 					af.f_z = (af.a == 0) ? 1 : 0;
 					af.f_n = 1;
 					break;

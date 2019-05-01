@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
 
 
 	DMGZ80CPU cpu;
-	cpu.readROM("04-op r,imm.gb");
+	cpu.readROM("09-op r,r.gb");
 
 	cpu.run();
 
