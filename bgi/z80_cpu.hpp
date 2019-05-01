@@ -830,6 +830,8 @@ public:
 		U16   aabb;
 		U8    b, reg_value;
 		U16   prev_value;
+		U16   prev_a;
+		U8    prev_c;
 		U8    carry;
 		U8    bhere = 1;
 		U8    ly = memory[LCD_Y_COORD_REG];
@@ -837,6 +839,10 @@ public:
 		U8    _debug = true;		
 		U8 showpc = 0;
 		U16 debug_pc = 0xc00a;
+
+		U16 no_carry_sum;
+		U16 carry_sum;
+
 		//each loop takes about 0.0005 ms
 		while (TRUE)
 		{
@@ -1233,7 +1239,7 @@ public:
 				case 0x0A:
 					//cpu_cycles += 2;
 					pc += 1;
-					af.a = memory[bc.c];
+					af.a = memory[bc.all];
 					//printf("LD  \n");
 					break;
 
@@ -1457,27 +1463,33 @@ public:
 				case 0x8E:
 				case 0x8F:
 					//cpu_cycles += 1;
+					
 					prev_value = af.a;
 					af.a = af.a + (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
 					af.f_c = (prev_value >= af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;			
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
+
 					pc += 1;
 					//printf("ADC  %04X\n", af.a);
 					break;
 
 					//ADC add xx + flag_carry to A
 				case 0xCE:
+					//printf("b :");
+					//printREG();
 					//cpu_cycles += 1;
 					prev_value = af.a;
 					af.a += (xx + af.f_c);
-					pc += 2;
 					af.f_c = (prev_value >= af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					//printf("ADC  %04X\n", af.a);
+					//printf("a :");
+					//printREG();
+					pc += 2;
 					break;
 
 					//CCF clear carry flag
@@ -1986,14 +1998,62 @@ public:
 				case 0xDE:
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, xx, af.f_c);
-					pc += 2;
+
+					//printf("a :");
+					//printREG();
+
+					/*
 					prev_value = af.a;
 					af.a = af.a - af.f_c - xx;
-					af.f_c = (prev_value >= af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
+					af.f_c = (prev_value <= af.a) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) <= (af.a & 0xF)) ? 1 : 0;
+					af.f_n = 1;
+					af.f_z = (af.a == 0) ? 1 : 0;
+					*/
+
+					printf("sbc %02X,%02X\n", af.a, xx);
+					//two stage
+					//first
+
+					prev_c = af.f_c;
+
+					if ((af.a == 0x00) && (prev_c == 1))
+					{
+						af.f_c = 1;
+					}
+					else 
+					{
+						af.f_c = 0;
+					}
+					if (((af.a & 0x0F) == 0x00) && (prev_c == 1))
+					{
+						af.f_h = 1;
+					}
+					else
+					{
+						af.f_h = 0;
+					}
+					af.a = af.a - prev_c;
+					//second
+					prev_a = af.a;
+					af.a = af.a - xx;
+
+					if(af.f_c == 0)
+					{
+						af.f_c = (prev_a < af.a) ? 1 : 0;
+					}
+					if (af.f_h == 0)
+					{
+						af.f_h = ((prev_a & 0xF) < (af.a & 0xF)) ? 1 : 0;
+					}
+
 					af.f_n = 1;
 					af.f_z = (af.a == 0) ? 1 : 0;
 
+					printf("  af= %04X\n", af.all);
+					//printREG();
+
+					pc += 2;
 					break;
 
 					//SBC subtract reg+cy from A
