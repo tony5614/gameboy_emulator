@@ -828,7 +828,7 @@ public:
 	{
 		U8    opcode, xx;
 		U16   aabb;
-		U8    b, reg_value;
+		U8    b, reg_value, reg_a_temp;
 		U16   prev_value;
 		U16   prev_a;
 		U8    prev_c;
@@ -1118,22 +1118,26 @@ public:
 					//add xx to sp    
 				case 0xE8:
 					//cpu_cycles += 4;
-					//printf("add 0x%02X to 0x%04X\n", xx, sp);
+					//if (((char)xx) < 0)
+					//	printf("add 0x%04X , %02d ,", sp, (char)xx );
 					prev_value = sp;
 					sp += (char)xx;
 					af.f_n = 0;
 					af.f_z = 0;
 					if (((char)xx) > 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) > (sp & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value > sp) ? 1 : 0;
+						//although it contradict with doc, it can pass test rom
+						af.f_h = ((prev_value & 0xF) > (sp & 0xF)) ? 1 : 0;
+						af.f_c = ((prev_value & 0xFF) > (sp & 0xFF)) ? 1 : 0;
 					}
 					else if (((char)xx) < 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) < (sp & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value < sp) ? 1 : 0;
+						af.f_h = ((prev_value & 0xF) < (sp & 0xF)) ? 0 : 1;
+						af.f_c = ((prev_value & 0xFF) < (sp & 0xFF)) ? 0 : 1;
 					}
 					//printREG();
+					//if (((char)xx) < 0)
+					//	printf("AF = 0x%04X , SP = %04X\n",af.all , sp);
 					pc += 2;
 					break;
 
@@ -1301,13 +1305,14 @@ public:
 					af.f_z = 0;
 					if (((char)xx) > 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value > hl.all) ? 1 : 0;
+						//although it contradict with doc, it can pass test rom
+						af.f_h = ((prev_value & 0xF) > (hl.all & 0xF)) ? 1 : 0;
+						af.f_c = ((prev_value & 0xFF) > (hl.all & 0xFF)) ? 1 : 0;
 					}
 					else if (((char)xx) < 0)
 					{
-						af.f_h = ((prev_value & 0xFFF) > (hl.all & 0xFFF)) ? 1 : 0;
-						af.f_c = (prev_value < hl.all) ? 1 : 0;
+						af.f_h = ((prev_value & 0xF) < (hl.all & 0xF)) ? 0 : 1;
+						af.f_c = ((prev_value & 0xFF) < (hl.all & 0xFF)) ? 0 : 1;
 					}
 					pc += 2;
 					//printf("load HL with SP  \n");
@@ -1463,13 +1468,46 @@ public:
 				case 0x8E:
 				case 0x8F:
 					//cpu_cycles += 1;
-					
+					/*
 					prev_value = af.a;
 					af.a = af.a + (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
 					af.f_c = (prev_value >= af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;			
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
+					*/
+
+
+
+
+					//first : counteract carrybit
+					//using reg_a_temp istead of af.a is because if addend is af.a , it maybe changed in the process, even if is also augend
+					//the result maybe confused
+					reg_a_temp = af.a + af.f_c;
+
+					//this line does not chant af.f_c, so put this line ahead
+					if (((reg_a_temp & 0x0F) == 0x00) && (af.f_c == 1))
+						af.f_h = 1;
+					else
+						af.f_h = 0;
+
+					if ((reg_a_temp == 0x00) && (af.f_c == 1))
+						af.f_c = 1;
+					else
+						af.f_c = 0;
+
+					//second : like narmal SUB
+					prev_a = reg_a_temp;
+					reg_a_temp = reg_a_temp + (*idxToRegr_HL(opcode & 0x7));
+					if (af.f_c == 0)
+						af.f_c = (prev_a > reg_a_temp) ? 1 : 0;
+
+					if (af.f_h == 0)
+						af.f_h = ((prev_a & 0xF) > (reg_a_temp & 0xF)) ? 1 : 0;
+
+					af.f_n = 0;
+					af.f_z = (reg_a_temp == 0) ? 1 : 0;
+					af.a = reg_a_temp;
 
 					pc += 1;
 					//printf("ADC  %04X\n", af.a);
@@ -1477,19 +1515,53 @@ public:
 
 					//ADC add xx + flag_carry to A
 				case 0xCE:
-					//printf("b :");
-					//printREG();
 					//cpu_cycles += 1;
+					//printf("ADC  %04X\n", af.a);
+					pc += 2;
+
+
+					//printf("adc %02X,%02X   af=%04X \n", af.a, xx, af.all);
+
+					/*
 					prev_value = af.a;
 					af.a += (xx + af.f_c);
 					af.f_c = (prev_value >= af.a) ? 1 : 0;
 					af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 0;
 					af.f_z = (af.a == 0) ? 1 : 0;
-					//printf("ADC  %04X\n", af.a);
-					//printf("a :");
-					//printREG();
-					pc += 2;
+					*/
+
+					//first : counteract carrybit
+					//using reg_a_temp istead of af.a is because if addend is af.a , it maybe changed in the process, even if is also augend
+					//the result maybe confused
+					af.a = af.a + af.f_c;
+
+					//this line does not chant af.f_c, so put this line ahead
+					if (((af.a & 0x0F) == 0x00) && (af.f_c == 1))
+						af.f_h = 1;
+					else
+						af.f_h = 0;
+
+					if ((af.a == 0x00) && (af.f_c == 1))
+						af.f_c = 1;
+					else
+						af.f_c = 0;
+
+					//second : like narmal SUB
+					prev_a = af.a;
+					af.a = af.a + xx;
+					if (af.f_c == 0)
+						af.f_c = (prev_a > af.a) ? 1 : 0;
+
+					if (af.f_h == 0)
+						af.f_h = ((prev_a & 0xF) > (af.a & 0xF)) ? 1 : 0;
+
+					af.f_n = 0;
+					af.f_z = (af.a == 0) ? 1 : 0;
+
+
+					//printf("  af= %04X\n", af.all);
+
 					break;
 
 					//CCF clear carry flag
@@ -1999,59 +2071,56 @@ public:
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, xx, af.f_c);
 
-					//printf("a :");
-					//printREG();
+
+					//printf("sbc %02X,%02X   af=%04X \n", af.a, xx, af.all);
 
 					/*
 					prev_value = af.a;
 					af.a = af.a - af.f_c - xx;
-					af.f_c = (prev_value <= af.a) ? 1 : 0;
-					af.f_h = ((prev_value & 0xF) <= (af.a & 0xF)) ? 1 : 0;
+					af.f_c = (prev_value < af.a) ? 1 : 0;
+					af.f_h = ((prev_value & 0xF) < (af.a & 0xF)) ? 1 : 0;
 					af.f_n = 1;
 					af.f_z = (af.a == 0) ? 1 : 0;
 					*/
 
-					printf("sbc %02X,%02X\n", af.a, xx);
+					
+
 					//two stage
-					//first
+					//reason : in case a=0 c=1 xx=F
+					//          00 - 01 = FF
+					//           ¡Â<-------------
+					//          FF - 0F = F0   
+					//                     ¡Â<---
+					//                         lower nibble is alway zero , cannot tell if iI should set flag_h
 
-					prev_c = af.f_c;
 
-					if ((af.a == 0x00) && (prev_c == 1))
-					{
-						af.f_c = 1;
-					}
-					else 
-					{
-						af.f_c = 0;
-					}
-					if (((af.a & 0x0F) == 0x00) && (prev_c == 1))
-					{
+					//first : counteract carrybit
+					af.a = af.a - af.f_c;
+
+					//this line does not chant af.f_c, so put this line ahead
+					if (((af.a & 0x0F) == 0x0F) && (af.f_c == 1))
 						af.f_h = 1;
-					}
 					else
-					{
 						af.f_h = 0;
-					}
-					af.a = af.a - prev_c;
-					//second
+
+					if ((af.a == 0xFF) && (af.f_c == 1))
+						af.f_c = 1;
+					else
+						af.f_c = 0;
+
+					//second : like narmal ADD
 					prev_a = af.a;
 					af.a = af.a - xx;
-
 					if(af.f_c == 0)
-					{
 						af.f_c = (prev_a < af.a) ? 1 : 0;
-					}
+
 					if (af.f_h == 0)
-					{
 						af.f_h = ((prev_a & 0xF) < (af.a & 0xF)) ? 1 : 0;
-					}
 
 					af.f_n = 1;
 					af.f_z = (af.a == 0) ? 1 : 0;
 
-					printf("  af= %04X\n", af.all);
-					//printREG();
+					//printf("  af= %04X\n", af.all);
 
 					pc += 2;
 					break;
@@ -2068,12 +2137,44 @@ public:
 					//cpu_cycles += 1;
 					//printf("%04X sub %04X cy: %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)), af.f_c);
 					pc += 2;
+					/*
 					prev_value = af.a;
 					af.a = af.a - (*idxToRegr_HL(opcode & 0x7)) - af.f_c ;					
 					af.f_h = ((af.a & 0xF) >= (prev_value & 0xF)) ? 1 : 0;
 					af.f_c = (af.a >= prev_value) ? 1 : 0;
 					af.f_n = 1;
-					af.f_z = (af.a == 0) ? 1 : 0;
+					af.f_z = (af.a == 0) ? 1 : 0;*/
+
+					//first : counteract carrybit
+					//af.a = af.a - af.f_c;
+					//in order not to modify af.a before all process done, so use reg_a_temp
+					reg_a_temp = af.a - af.f_c;
+
+					//this line does not chant af.f_c, so put this line ahead
+					if (((reg_a_temp & 0x0F) == 0x0F) && (af.f_c == 1))
+						af.f_h = 1;
+					else
+						af.f_h = 0;
+
+					if ((reg_a_temp == 0xFF) && (af.f_c == 1))
+						af.f_c = 1;
+					else
+						af.f_c = 0;
+
+					//second : like narmal ADD
+					prev_a = reg_a_temp;
+					reg_a_temp = reg_a_temp - (*idxToRegr_HL(opcode & 0x7));
+					if (af.f_c == 0)
+						af.f_c = (prev_a < reg_a_temp) ? 1 : 0;
+
+					if (af.f_h == 0)
+						af.f_h = ((prev_a & 0xF) < (reg_a_temp & 0xF)) ? 1 : 0;
+
+					af.f_n = 1;
+					af.f_z = (reg_a_temp == 0) ? 1 : 0;
+
+					af.a = reg_a_temp;
+
 					break;
 
 					//SUB
