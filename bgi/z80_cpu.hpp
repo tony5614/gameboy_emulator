@@ -18,10 +18,6 @@ typedef unsigned short U16;
 #define EXTERNAL_RAM_BASE      (0xA000)
 #define WORK_RAM_BASE          (0xC000)
 #define OAM                    (0xFE00)
-#define OAM_MEM_SIZE           (0xA0)
-#define OAM_COUNT              (40)
-#define OAM_X_OFFSET           (-8)
-#define OAM_Y_OFFSET           (-16)
 #define PERIPHERAL_BASE        (0xFF00)
 #define JOY_PAD                (0xFF00)
 #define     JOY_PAD_RESET          (BIT(4)|BIT(5))
@@ -31,24 +27,28 @@ typedef unsigned short U16;
 #define TIMA                   (0xFF05)    //timer counter
 #define TMA                    (0xFF06)    //timer modulo
 #define TAC                    (0xFF07) // timer control
+#define     TAC_START          		BIT(2) //timer start
 #define LCD_CTRL_REG           (0xFF40) //LCDC
 #define     BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
 #define     BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
 #define     BG_WIN_ON_FALG         BIT(5)   //window on Flag
 #define     BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
+#define LCD_STAT               (0xFF41) //STAT
+#define     LCD_INT_H_BLNK         BIT(3)
+#define     LCD_INT_V_BLNK         BIT(4)
+#define     LCD_INT_OAM            BIT(5)
+#define     LCD_INT_LYC_LY         BIT(6)
 #define SCY                    (0xFF42) //lcd scroll y
 #define SCX                    (0xFF43) //lcd scroll x
 #define LCD_Y_COORD_REG        (0xFF44) //LY lcd control y coordinate
 #define DMA                    (0xFF46) //DMA
 #define BG_PALETTE_DATA        (0xFF47) //BGP
-
-#define INT_FLAGS         (0xFF0F)
+#define INT_FLAGS              (0xFF0F)
 #define     INT_FLAG_VERT_BLANKING BIT(0)
 #define     INT_FLAG_LCDC          BIT(1)
 #define     INT_FLAG_TIMER         BIT(2)
 #define     INT_FLAG_SERIEAL_TRANS BIT(3)
 #define     INT_FLAG_P10_P13       BIT(4)
-
 #define HIGH_WORK_RAM_BASE     (0xFF80)
 #define STACK_BEGIN_ADDR       (0xFFFE)
 #define INT_SWITCH             (0xFFFF)
@@ -57,14 +57,18 @@ typedef unsigned short U16;
 #define BG_CODE_DATA_SIZE      (0x400)
 
 
+#define OAM_MEM_SIZE           (0xA0)
+#define OAM_COUNT              (40)
+#define OAM_X_OFFSET           (-8)
+#define OAM_Y_OFFSET           (-16)
 
 #define MEMORY_SIZE            (65536)
 
 #define SCREEN_OFFSET          (10)
 #define LCD_WIDTH              (160)
 #define LCD_HEIGHT             (144)
-#define VIEWPORT_X             (300)
-#define VIEWPORT_Y             (125)
+#define VIEWPORT_X             (390)
+#define VIEWPORT_Y             (0)
 
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BGI_BUFFER_X   (256)
@@ -74,6 +78,7 @@ typedef unsigned short U16;
 #define BG_Y                   (0)
 
 #define TILE_SIZE              (8)
+#define TILE_MEM_SIZE          (0x1800)
 
 #define ISR_VERTICAL_BLANKING  0x40
 #define ISR_LCDC               0x48
@@ -128,46 +133,19 @@ union HL
 
 class DMGZ80CPU;
 
+
 class TILE_DOT_DATA_PAINTER
 {
 public:
-    static int paletteCodeToColor(U8 palette_color_code)
-    {
-        U8  color_code;
-        int color;
-        U8  bg_palette_color = 0xE4;//memory[BG_PALETTE_DATA];
-        U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+	static DMGZ80CPU *cpu;
 
-        //palette color code -> color code
-        color_code = palette_code_to_color_code[palette_color_code];
-
-        //color code -> color
-        switch (color_code)
-        {
-        case 0x0:
-            color = COLOR(230, 230, 230);
-            break;
-        case 0x1:
-            color = COLOR(154, 154, 154);
-            break;
-        case 0x2:
-            color = COLOR(77, 77, 77);
-            break;
-        case 0x3:
-            color = COLOR(0, 0, 0);
-            break;
-        default:
-            //printf("unknown color code\n");
-            break;
-        }
-        return color;
-    }
+	static int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code);
     //paint 1 row, 8 dots
-    //in BG_TILE_BGI_BUFFER ,each row accommodates 32 tile (256 dots)
+    //in BG_TILE_BGI_BUFFER ,each row accommodates 16 tile (128 dots)
     static void paintTileDotData(U16 dot_data_byte_idx, U8 upper_dot_byte, U8 lower_dot_byte)
     {
-        // dot_data_idx = (dot_data_byte_idx >> 1) , because two bytes represent one row
-
+		U8 dots_one_row       = 0x7F;   //128 dots in a row
+		U8 dots_one_row_shift = 0x7;    //2^7 = 128 dots in a row
         // ---0---  ---8---       --------   --------
         // ---1---  ---9---       --------   --------
         // ---2---  --10---       --------   --------
@@ -175,22 +153,27 @@ public:
         // ---4---  -+12---       --------   --------
         // ---5---  --13---       --------   --------
         // ---6---  --14---       --------   --------
-        // ---7---  --15---   ~   --------   ---255--
-        //             ^-- dot_data_idx = 12      ^---- dot_data_idx = 255, 32 tiles 
+        // ---7---  --15---   ~   --------   ---127--
+        //             ^-- dot_data_idx = 12      ^---- dot_data_idx = 127, 16 tiles 
         //
-        // 12 / 8 = 1     -> x_pos = 1*8
-        // 12 / 256 = 0   -> y_tile_row = 0*8
+        // 12 / 7 = 1     -> x_pos = 1*8
+        // 12 / 128 = 0   -> y_tile_row = 0*8
         // (12 % 8) = 4 -> y_pos = y_row + 4
 
         dot_data_byte_idx = dot_data_byte_idx - VIDEO_RAM_BASE;
+        //dot_data_idx = (dot_data_byte_idx >> 1) , because two bytes represent one row
         U16 dot_data_idx = (dot_data_byte_idx >> 1);
         //each tile contains 64 dots
-        int x_pos = BG_TILE_BGI_BUFFER_X + (((dot_data_idx & 0xFF) >> 3) << 3);
-        int y_tile_row = (dot_data_idx >> 8) << 3;
+		// 12 / 7 = 1     -> x_pos = 1*8
+        int x_pos = BG_TILE_BGI_BUFFER_X + (((dot_data_idx & dots_one_row) >> 3) << 3);
+		// 12 / 128 = 0   -> y_tile_row = 0*8
+        int y_tile_row = (dot_data_idx >> dots_one_row_shift) << 3;
+		// (12 % 8) = 4 -> y_pos = y_row + 4
         int y_pos = BG_TILE_BGI_BUFFER_Y + y_tile_row + ((dot_data_idx) & 0x7);
         int bgi_color;
         U8  color_code = 0;
 
+		//render one row of a tile
         for (int x = x_pos; x < (x_pos + 8); x++)
         {
             color_code = 0;
@@ -338,6 +321,7 @@ public:
 U16                    *U8DATA::pc;
 DMGZ80CPU              *U8DATA::cpu;
 TILE_DOT_DATA_PAINTER  *U8DATA::tile_dot_data_painter;
+DMGZ80CPU              *TILE_DOT_DATA_PAINTER::cpu;
 
 class DEBUG_MEM
 {
@@ -408,6 +392,7 @@ public:
         U8DATA::pc = &this->pc;
         U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
         U8DATA::cpu = this;
+		TILE_DOT_DATA_PAINTER::cpu = this;
 
         //boot rom
         //sp = STACK_BEGIN_ADDR;
@@ -712,8 +697,8 @@ public:
     //tile_no is actually charactor code in doc
     void getTile(U8 tile_no, void *tile_ptr)
     {
-        U8 tile_idx_x = tile_no & 0x1F; // *8 % 256
-        U8 tile_idx_y = tile_no >> 5;   // *8 / 256
+        U8 tile_idx_x = tile_no & 0xF;  // *8 % 128
+        U8 tile_idx_y = tile_no >> 4;   // *8 / 128
         //minus 1 means 0~7 8~15 ...
         getimage(BG_TILE_BGI_BUFFER_X + tile_idx_x * TILE_SIZE, BG_TILE_BGI_BUFFER_Y + tile_idx_y * TILE_SIZE, BG_TILE_BGI_BUFFER_X + (tile_idx_x + 1) * TILE_SIZE - 1, BG_TILE_BGI_BUFFER_Y + (tile_idx_y + 1) * TILE_SIZE - 1, tile_ptr);
     }
@@ -744,10 +729,15 @@ public:
         buildAllTileData();
         buildBackground();
     }*/
+
+	//LCD timing
+	//Mode2 OAM  O_____O_____O_____O_____O_____O___________________O____
+	//Mode3 DMA  _DD____DD____DD____DD____DD____DD__________________D___
+	//Mode0 H    ___HHH___HHH___HHH___HHH___HHH___HHH________________HHH
+	//Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
     void update_lcd_y_coord()
     {
-        //if (((//cpu_cycles + 5)% 228) <= 10)
-        if ((cpu_cycles & 0x7F) == 0)
+        if ((cpu_cycles & 0x3F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
             memory[LCD_Y_COORD_REG] = (U8)(memory[LCD_Y_COORD_REG] + 1);
@@ -769,9 +759,12 @@ public:
         // 0b11 -> freq / 2^8
         U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
 
-        if ((cpu_cycles & timer_mod_mask) == 0)
-        {
-            memory[TIMA] = memory[TIMA] + 1;
+		if ((cpu_cycles & timer_mod_mask) == 0)
+		{
+			if (memory[TAC] & TAC_START) 
+			{
+				memory[TIMA] = memory[TIMA] + 1;
+			}
             //printf("timer int cpu_cycles = %X, ", cpu_cycles);
             //printf(" memory[TIMA] = %X\n", (U8)(memory[TIMA]));
         }
@@ -781,7 +774,7 @@ public:
     }
     void check_interrupt_and_dispatch_isr()
     {
-        //
+		U8 lcd_int_mode;
         //memory[INT_FLAGS_ADDR];
         //memory[INT_SWITCH_BASE];
 
@@ -811,6 +804,7 @@ public:
             }
         }
 
+		
         //timer interupt ISR = 0x50
         if (memory[TIMA] == 0xFF)
         {
@@ -877,6 +871,7 @@ public:
         getimage(BG_X + scx, BG_Y + scy, BG_X + scx + LCD_WIDTH, BG_Y + scy + LCD_HEIGHT, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
     }
+	//
 	bool isFocused() 
 	{
 		char wnd_title[256];
@@ -2347,7 +2342,7 @@ U8DATA &U8DATA::operator=(U8 val)
     case 0xFE03:
         break;
     case 0xFFFF:
-        printf("pc= %04X ,assign operator @ %04X  to %02X\n", this->cpu->pc, this->access_addr, val);
+        //printf("pc= %04X ,assign operator @ %04X  to %02X\n", this->cpu->pc, this->access_addr, val);
 
         break;
     }
@@ -2391,4 +2386,38 @@ U8DATA &U8DATA::operator=(U8 val)
         this->value = val;
     }
     return (*this);
+}
+
+
+
+int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code)
+{
+	U8  color_code;
+	int color;
+	U8  bg_palette_color = TILE_DOT_DATA_PAINTER::cpu->memory[BG_PALETTE_DATA];
+	U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+
+	//palette color code -> color code
+	color_code = palette_code_to_color_code[palette_color_code];
+
+	//color code -> color
+	switch (color_code)
+	{
+	case 0x0:
+		color = COLOR(230, 230, 230);
+		break;
+	case 0x2:
+		color = COLOR(154, 154, 154);
+		break;
+	case 0x1:
+		color = COLOR(77, 77, 77);
+		break;
+	case 0x3:
+		color = COLOR(0, 0, 0);
+		break;
+	default:
+		//printf("unknown color code\n");
+		break;
+	}
+	return color;
 }
