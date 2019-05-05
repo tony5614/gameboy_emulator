@@ -1,3 +1,3 @@
 # gameboy_emulator
 gameboy_emulator
-[](gameboy_emulator.gif)
+[](gameboy_emulator/gameboy_emulator.gif)
