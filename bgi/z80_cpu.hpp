@@ -13,6 +13,7 @@ typedef unsigned short U16;
 #define BIT(x)                 (0x1 << (x))
 
 #define CARTRIDGE_ROM_BASE     (0x0000)
+#define CARTRIDGE_ROM_END      (0x7FFF)
 #define VIDEO_RAM_BASE         (0x8000)
 #define EXTERNAL_RAM_BASE      (0xA000)
 #define WORK_RAM_BASE          (0xC000)
@@ -26,6 +27,7 @@ typedef unsigned short U16;
 #define     JOY_PAD_RESET          (BIT(4)|BIT(5))
 #define     JOY_PAD_SEL_BUTTON     BIT(4)
 #define     JOY_PAD_SEL_DIRECT     BIT(5)
+#define DIV                    (0xFF04)    //DIV ,frequently used as random generator
 #define TIMA                   (0xFF05)    //timer counter
 #define TMA                    (0xFF06)    //timer modulo
 #define TAC                    (0xFF07) // timer control
@@ -143,13 +145,13 @@ public:
         switch (color_code)
         {
         case 0x0:
-            color = COLOR(255, 255, 255);
+            color = COLOR(230, 230, 230);
             break;
         case 0x1:
-            color = COLOR(170, 170, 170);
+            color = COLOR(154, 154, 154);
             break;
         case 0x2:
-            color = COLOR(85, 85, 85);
+            color = COLOR(77, 77, 77);
             break;
         case 0x3:
             color = COLOR(0, 0, 0);
@@ -259,37 +261,39 @@ public:
         }
         else if (access_addr == 0xFF00)
         {
-            if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
-            {
-                this->value = 0xFF;
-            }
-            else if (this->value & JOY_PAD_SEL_DIRECT)
-            {
-                if (GetKeyState(VK_RIGHT) < 0)
-                    this->value &= (~BIT(0));
-                if (GetKeyState(VK_LEFT) < 0)
-                    this->value &= (~BIT(1));
-                if (GetKeyState(VK_UP) < 0)
-                    this->value &= (~BIT(2));
-                if (GetKeyState(VK_DOWN) < 0)
-                    this->value &= (~BIT(3));
-            }
-            else if (this->value & JOY_PAD_SEL_BUTTON)
-            {
-                if (GetKeyState('A') < 0)
-                    this->value &= (~BIT(0));
-                if (GetKeyState('S') < 0)
-                    this->value &= (~BIT(1));
-                if (GetKeyState(VK_SHIFT) < 0)
-                    this->value &= (~BIT(2));
-                if (GetKeyState(VK_RETURN) < 0)
-                    this->value &= (~BIT(3));
-            }
-            else
-            {
-                //printf("unknown joy sel %04X\n", this->value);
-                while (_hang);
-            }
+
+			if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
+			{
+				this->value = 0xFF;
+			}
+			else if (this->value & JOY_PAD_SEL_DIRECT)
+			{
+				if (GetKeyState(VK_RIGHT) < 0)
+					this->value &= (~BIT(0));
+				if (GetKeyState(VK_LEFT) < 0)
+					this->value &= (~BIT(1));
+				if (GetKeyState(VK_UP) < 0)
+					this->value &= (~BIT(2));
+				if (GetKeyState(VK_DOWN) < 0)
+					this->value &= (~BIT(3));
+			}
+			else if (this->value & JOY_PAD_SEL_BUTTON)
+			{
+				if (GetKeyState('A') < 0)
+					this->value &= (~BIT(0));
+				if (GetKeyState('S') < 0)
+					this->value &= (~BIT(1));
+				if (GetKeyState(VK_SHIFT) < 0)
+					this->value &= (~BIT(2));
+				if (GetKeyState(VK_RETURN) < 0)
+					this->value &= (~BIT(3));
+			}
+			else
+			{
+				//printf("unknown joy sel %04X\n", this->value);
+				while (_hang);
+			}
+			
         }
         return this->value;
     }
@@ -460,7 +464,7 @@ public:
         //clear memory
         memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
     }
-    inline    void printREG()
+    inline void printREG()
     {
         printf("A:%02X F:%02X   z:%d  n:%d  h:%d  c:%d \n", af.a, af.all & 0xFF, af.f_z, af.f_n, af.f_h, af.f_c);
         printf("B:%02X C:%02X\n", bc.b, bc.c);
@@ -771,6 +775,9 @@ public:
             //printf("timer int cpu_cycles = %X, ", cpu_cycles);
             //printf(" memory[TIMA] = %X\n", (U8)(memory[TIMA]));
         }
+
+		//update div
+		memory[DIV] = (cpu_cycles & 0xFF00) >> 8;
     }
     void check_interrupt_and_dispatch_isr()
     {
@@ -870,7 +877,27 @@ public:
         getimage(BG_X + scx, BG_Y + scy, BG_X + scx + LCD_WIDTH, BG_Y + scy + LCD_HEIGHT, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
     }
+	bool isFocused() 
+	{
+		char wnd_title[256];
+		char correct_window_title[] = "gameboy_emulator";
+		HWND hwnd = GetForegroundWindow();
 
+		GetWindowText(hwnd, wnd_title, sizeof(wnd_title));
+
+
+		if (strncmp(correct_window_title, wnd_title, 10) == 0) 
+		{
+		//printf("*%s\n", wnd_title);
+		//printf("-%s\n", correct_window_title);
+			return TRUE;
+		}
+		else 
+		{
+			return FALSE;
+		}
+
+	}
     void run()
     {
         U8    opcode, xx;
@@ -893,13 +920,18 @@ public:
         //each loop takes about 0.0005 ms
         while (TRUE)
         {
+			//if (this->isFocused() == FALSE) 
+			//{
+			//	printf("not focus\n");
+			//	continue;
+			//}
             //STOP instruction takes the highest priority
             //if stop_state is met, do not do any action
             //if (stop_state == TRUE) 
             //{
             //    continue;
             //}
-            cpu_cycles++;
+            cpu_cycles ++;
             update_lcd_y_coord();
             update_timer();
 
@@ -927,11 +959,6 @@ public:
 
                 ly = memory[LCD_Y_COORD_REG];
 
-
-                if (debug_pc == pc)
-                {
-                    //printf("hit %0x4X\n", debug_pc);
-                }
 
 
 
@@ -1392,7 +1419,8 @@ public:
                     //load (aabb) with A
                 case 0xEA:
                     //cpu_cycles += 4;
-                    memory[aabb] = af.a;
+					if (aabb > CARTRIDGE_ROM_END)
+						memory[aabb] = af.a;
                     pc += 3;
                     //printf("load (aabb) with A  \n");
                     break;
@@ -2281,6 +2309,11 @@ public:
 
 U8DATA &U8DATA::operator=(U8 val)
 {
+
+	if ((this->access_addr == 0x2000) && (val == 0x1))
+	{
+		printf("pc = %04X\n",this->cpu->pc);
+	}
     
     U8 _hang = true;
     switch (this->access_addr)
