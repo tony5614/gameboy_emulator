@@ -194,6 +194,7 @@ public:
     U8  value;
     U16 access_addr;
     U8 _hang;
+	U8 *raw_byte_ptr;
     U8DATA()
     {
         value = 0;
@@ -201,41 +202,12 @@ public:
     }
     U8DATA(U8 &val)
     {
-        this->value = val;
+        //this->value = val;
+		*(this->raw_byte_ptr) = val;
         _hang = true;
     }
     operator U8()
     {
-        switch (this->access_addr)
-        {
-            //case 0xFF00:
-        case 0xFF70:
-        case 0xFF01:
-        case 0xFF02:
-        case 0xFF04:
-        case 0xFF05:
-        case 0xFF06:
-        case 0xFF07:
-            //case 0xFF0F:
-        case 0xFF40:
-        case 0xFF41:
-        case 0xFF42:
-        case 0xFF43:
-        case 0xFF45:
-        case 0xFF46:
-        case 0xFF47:
-        case 0xFF48:
-        case 0xFF49:
-        case 0xFF4A:
-        case 0xFF4B:
-        case 0xFE00:
-        case 0xFE01:
-        case 0xFE02:
-        case 0xFE03:
-            //case 0xFFFF:
-            //printf("pc= %04X ,cast operator @ %04X\n", *pc, *access_addr);
-            break;
-        }
         ////printf("cast operator @ %04X\n", *access_addr);
         if (access_addr == 0xFF44)
         {
@@ -244,76 +216,75 @@ public:
         }
         else if (access_addr == 0xFF00)
         {
-
-			if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
+			if (((*(this->raw_byte_ptr)) & JOY_PAD_RESET) == JOY_PAD_RESET)
+			//if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
 			{
-				this->value = 0xFF;
+				//this->value = 0xFF;
+				*(this->raw_byte_ptr) = 0xFF;
 			}
-			else if (this->value & JOY_PAD_SEL_DIRECT)
+			else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_DIRECT)
+			//else if (this->value & JOY_PAD_SEL_DIRECT)
 			{
 				if (GetKeyState(VK_RIGHT) < 0)
-					this->value &= (~BIT(0));
-				if (GetKeyState(VK_LEFT) < 0)
-					this->value &= (~BIT(1));
-				if (GetKeyState(VK_UP) < 0)
-					this->value &= (~BIT(2));
-				if (GetKeyState(VK_DOWN) < 0)
-					this->value &= (~BIT(3));
+				{
+					//this->value &= (~BIT(0));
+					(*(this->raw_byte_ptr)) &= (~BIT(0));
+				}
+				if (GetKeyState(VK_LEFT) < 0) 
+				{
+					//this->value &= (~BIT(1));
+					(*(this->raw_byte_ptr)) &= (~BIT(1));
+				}
+				if (GetKeyState(VK_UP) < 0) 
+				{
+					//this->value &= (~BIT(2));
+					(*(this->raw_byte_ptr)) &= (~BIT(2));
+				}
+				if (GetKeyState(VK_DOWN) < 0) 
+				{
+					//this->value &= (~BIT(3));
+					(*(this->raw_byte_ptr)) &= (~BIT(3));
+				}
 			}
-			else if (this->value & JOY_PAD_SEL_BUTTON)
+			else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_BUTTON)
+			//else if (this->value & JOY_PAD_SEL_BUTTON)
 			{
 				if (GetKeyState('A') < 0)
-					this->value &= (~BIT(0));
-				if (GetKeyState('S') < 0)
-					this->value &= (~BIT(1));
+				{
+					//this->value &= (~BIT(0));
+					(*(this->raw_byte_ptr)) &= (~BIT(0));
+				}
+				if (GetKeyState('S') < 0) 
+				{
+					//this->value &= (~BIT(1));
+					(*(this->raw_byte_ptr)) &= (~BIT(1));
+				}
 				if (GetKeyState(VK_SHIFT) < 0)
-					this->value &= (~BIT(2));
-				if (GetKeyState(VK_RETURN) < 0)
-					this->value &= (~BIT(3));
+				{
+					//this->value &= (~BIT(2));
+					(*(this->raw_byte_ptr)) &= (~BIT(2));
+				}
+				if (GetKeyState(VK_RETURN) < 0) 
+				{
+					//this->value &= (~BIT(3));
+					(*(this->raw_byte_ptr)) &= (~BIT(3));
+				}
 			}
 			else
 			{
 				//printf("unknown joy sel %04X\n", this->value);
-				while (_hang);
+				//while (_hang);
 			}
 			
         }
-        return this->value;
+        //return this->value;
+        return (*(this->raw_byte_ptr));
     }
     U8* operator &()
     {
         //printf("get address operator @ %04X\n" ,*access_addr);
-        switch (this->access_addr)
-        {
-            //case 0xFF00:
-        case 0xFF70:
-        case 0xFF01:
-        case 0xFF02:
-        case 0xFF04:
-        case 0xFF05:
-        case 0xFF06:
-        case 0xFF07:
-            //case 0xFF0F:
-        case 0xFF40:
-        case 0xFF41:
-        case 0xFF42:
-        case 0xFF43:
-        case 0xFF45:
-        case 0xFF46:
-        case 0xFF47:
-        case 0xFF48:
-        case 0xFF49:
-        case 0xFF4A:
-        case 0xFF4B:
-        case 0xFE00:
-        case 0xFE01:
-        case 0xFE02:
-        case 0xFE03:
-            //case 0xFFFF:
-            //printf("pc= %04X ,get address operator @ %04X\n", *pc, *access_addr);
-            break;
-        }
-        return &this->value;
+        //return &this->value;
+        return &(*(this->raw_byte_ptr));
     }
     U8DATA &operator=(U8 val);
 };
@@ -329,7 +300,7 @@ public:
 
     //U16 access_addr;
     U8DATA  data[MEMORY_SIZE];
-    //U8  data[MEMORY_SIZE];
+	U8      raw_byte_data[MEMORY_SIZE];
     U8  _hang;
     U8DATA  *stack;
     DEBUG_MEM()
@@ -337,6 +308,13 @@ public:
         _hang = true;
         stack = data + 0xCFF0;
         //access_addr = 0;
+		memset((void*)raw_byte_data, 0x00, sizeof(U8) * MEMORY_SIZE);
+		//point to each raw byte
+		for (int i = 0; i < MEMORY_SIZE; i++) 
+		{
+			data[i].raw_byte_ptr = &raw_byte_data[i];
+		}
+
     }
     U8DATA &operator[](U16 addr)
     {
@@ -358,9 +336,24 @@ typedef struct oam_entry_struct
     U8 priority : 1; //0 : priority to sprite
 }OAM_ENTRY;
 
+
+typedef struct debug_log 
+{
+	AF af;
+	BC bc;
+	DE de;
+	HL hl;
+	U16 pc;
+	U16 sp;
+}DEBUGLOG;
+
 class DMGZ80CPU
 {
 private:
+	//debug
+	DEBUGLOG log[8192];
+
+	DEBUGLOG current_log;
 
     //U8 memory[MEMORY_SIZE];
     //register
@@ -394,6 +387,8 @@ public:
         U8DATA::cpu = this;
 		TILE_DOT_DATA_PAINTER::cpu = this;
 
+        ime = TRUE;
+
         //boot rom
         //sp = STACK_BEGIN_ADDR;
         //pc = 0x0;
@@ -401,7 +396,6 @@ public:
         //bc.all = 0x0000;
         //de.all = 0x0000;
         //hl.all = 0x0000;
-        ime = TRUE;
 
         tile_buf_ptr = malloc(imagesize(0, 0, TILE_SIZE - 1, TILE_SIZE - 1));
         viewport_buf_ptr = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
@@ -410,24 +404,24 @@ public:
         refresh_lcd = FALSE;
         
 
-        
+        /*
         sp = STACK_BEGIN_ADDR;
         pc = 0x100;
         af.all = 0x1100;
         bc.all = 0x0000;
         de.all = 0x0000;
         hl.all = 0x0000;
-        ime = TRUE;
+        ime = TRUE;*/
         
 
         //main program start
         //tetris rom initial state
-        /*sp = STACK_BEGIN_ADDR;
+        sp = STACK_BEGIN_ADDR;
         pc = 0x150;
         af.all = 0x01B0;
         bc.all = 0x0013;
         de.all = 0x00D8;
-        hl.all = 0x014D;*/
+        hl.all = 0x014D;
         
 
         //quick debug from
@@ -447,7 +441,7 @@ public:
         //hl.all = 0x97FF;
 
         //clear memory
-        memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
+        //memset((void*)(&memory[0]), 0x00, 0x10000 * sizeof(U8DATA));
     }
     inline void printREG()
     {
@@ -481,10 +475,16 @@ public:
         rom_size = fin.tellg();
         //move pointer to beginning of rom
         fin.seekg(0, fin.beg);
+
+		//copy bulk
+		fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), rom_size);
+
+        //move pointer to beginning of rom
+        fin.seekg(0, fin.beg);
+
         for (int i = 0; i < rom_size; i++)
         {
-            //fin.read((char *)(&memory[0] + CARTRIDGE_ROM_BASE + sizeof(U8DATA) * i), sizeof(char));
-
+			//assign one to one
             fin.read((char *)(&one_byte), sizeof(one_byte));
             memory[i] = one_byte;
         }
@@ -905,6 +905,9 @@ public:
         U8    bhere = 1;
         U8    ly = memory[LCD_Y_COORD_REG];
 
+
+		int log_idx = 0;
+
         U8    _debug = true;        
         U8 showpc = 0;
         U16 debug_pc = 0xc00a;
@@ -955,8 +958,20 @@ public:
                 ly = memory[LCD_Y_COORD_REG];
 
 
+				if (log_idx == 8192) 
+				{
+					log_idx = 0;
+				}
+				log[log_idx].af = this->af;
+				log[log_idx].bc = this->bc;
+				log[log_idx].de = this->de;
+				log[log_idx].hl = this->hl;
+				log[log_idx].pc = this->pc;
+				log[log_idx].sp = this->sp;
 
+				current_log = log[log_idx];
 
+				log_idx++;
                 if(showpc)
                     printREG();
                 switch (opcode)
@@ -2281,7 +2296,8 @@ public:
                     af.f_h = 0;
                     break;
                 default:
-                    //printf("unknown opcode : \n", opcode);
+                    printf("unknown opcode : %02X\n", opcode);
+					while (1);
                     break;
 
                 }
@@ -2304,48 +2320,19 @@ public:
 
 U8DATA &U8DATA::operator=(U8 val)
 {
+	//this area is read-only, the only to access this area is by DEBUG_MEM->raw_byte_data[MEMORY_SIZE] ,like "fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), rom_size);"
+	//if (this->access_addr <= CARTRIDGE_ROM_END) 
+	//{
+	//	return (*this);
+	//}
 
-	if ((this->access_addr == 0x2000) && (val == 0x1))
+	if ((this->access_addr == 0x37) && (val == 0x39))
 	{
 		printf("pc = %04X\n",this->cpu->pc);
 	}
     
     U8 _hang = true;
-    switch (this->access_addr)
-    {
-        //case 0xFF00:
-    case 0xFF70:
-    case 0xFF01:
-    case 0xFF02:
-    case 0xFF04:
-        break;
-    //case TIMA:        //0xFF05
-    //case TMA:        //0xFF06
-    case TAC:        //0xFF07
-        //timer emable
-        break;
-        //case 0xFF0F:
-    case 0xFF40:
-    case 0xFF41:
-    case 0xFF42:
-    case 0xFF43:
-    case 0xFF45:
-    case 0xFF46:
-    case 0xFF47:
-    case 0xFF48:
-    case 0xFF49:
-    case 0xFF4A:
-    case 0xFF4B:
-    case 0xFE00:
-    case 0xFE01:
-    case 0xFE02:
-    case 0xFE03:
-        break;
-    case 0xFFFF:
-        //printf("pc= %04X ,assign operator @ %04X  to %02X\n", this->cpu->pc, this->access_addr, val);
-
-        break;
-    }
+   
 
     U16 bg_tile_ram_end_eddr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
     if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_eddr)))
@@ -2361,12 +2348,14 @@ U8DATA &U8DATA::operator=(U8 val)
             }
             tile_dot_data_painter->paintTileDotData(access_addr, (U8)(cpu->memory[access_addr - 1]), val);
         }
-        this->value = val;
+        //this->value = val;
+		(*(this->raw_byte_ptr)) = val;
     }
     else if (access_addr == JOY_PAD) //0xFF00
     {
         //reset joy pad
-        this->value = val | 0xCF;
+        //this->value = val | 0xCF;
+		(*(this->raw_byte_ptr)) = val | 0xCF;
     }
     else if (access_addr == DMA) //0xFF46
     {
@@ -2378,12 +2367,14 @@ U8DATA &U8DATA::operator=(U8 val)
         {
             this->cpu->memory[OAM + idx] = this->cpu->memory[src_addr + idx];
         }
-        this->value = val;
+        //this->value = val;
+		(*(this->raw_byte_ptr)) = val;
     }
     //normal assignment
     else
     {
-        this->value = val;
+        //this->value = val;
+		(*(this->raw_byte_ptr)) = val;
     }
     return (*this);
 }
