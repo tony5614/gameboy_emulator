@@ -745,30 +745,40 @@ public:
     }*/
     //get tile from built tile data
     //tile_no is actually charactor code in doc
-    void getTile(U8 tile_no, void *tile_ptr)
+    void getTile(U16 tile_no, void *tile_ptr)
     {
-        U8 tile_idx_x = tile_no & 0xF;  // *8 % 128
-        U8 tile_idx_y = tile_no >> 4;   // *8 / 128
-        //minus 1 means 0~7 8~15 ...
+        U16 tile_idx_x = tile_no & 0xF;  // *8 % 128
+        U16 tile_idx_y = tile_no >> 4;   // *8 / 128
+        //minus 1 means 0~7  8~15 (pixel)...
         getimage(BG_TILE_BGI_BUFFER_X + tile_idx_x * TILE_SIZE, BG_TILE_BGI_BUFFER_Y + tile_idx_y * TILE_SIZE, BG_TILE_BGI_BUFFER_X + (tile_idx_x + 1) * TILE_SIZE - 1, BG_TILE_BGI_BUFFER_Y + (tile_idx_y + 1) * TILE_SIZE - 1, tile_ptr);
     }
     //render 160 * 144 takes about 40ms 
     //takes about 79800 cpu cycles
     void buildBackground()
     {
-        U8    tile_no; //BG MAP , tile number, chr_code
+        U16    tile_no; //BG MAP , tile number, chr_code
         U16   bg_disp_data_addr = ((memory[LCD_CTRL_REG] & BG_CODE_SEL_FALG) ? 0x9C00 : 0x9800);
+        U16   bg_tile_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
 
         for (int y = 0; y < 256; y += 8)
         {
             for (int x = 0; x < 256; x += 8)
             {
                 tile_no = memory[bg_disp_data_addr++];
-                //out of viewport
-                //if ((x >= 160) || (y >= 144))
-                //    continue;
-                getTile(tile_no, tile_buf_ptr);
 
+                //if bg tile data locates at 0x8000 ~ 0x8FFF
+                //tile_no can be 0x00 ~ 0xFF
+                //if bg tile data locates at 0x8800 ~ 0x97FF
+                //tile_no can be 0x80 ~ 0xFF , 0x00 ~ 0x7F
+                //0x00 ~ 0x7F actually means 0x100 ~ 0x17F, so shift tile_no by 0x100
+                if (bg_tile_data_ofst == 0x8800) 
+                {
+                    if (tile_no < 0x80)
+                    {
+                        tile_no = tile_no + 0x100;
+                    }
+                }                
+                getTile(tile_no, tile_buf_ptr);
                 putimage(BG_X + x, BG_Y + y, tile_buf_ptr, COPY_PUT);
             }
         }
