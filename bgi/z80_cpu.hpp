@@ -13,7 +13,10 @@ typedef unsigned short U16;
 #define BIT(x)                 (0x1 << (x))
 
 #define CARTRIDGE_ROM_BASE     (0x0000)
-#define CARTRIDGE_ROM_END      (0x7FFF)
+#define MBC1_REGISTER_1        (0x2000)
+#define ROM_BANK1_START        (0x4000)
+#define ROM_END                (0x7FFF)
+#define ROM_IN_Z80_SIZE        (0x8000)
 #define VIDEO_RAM_BASE         (0x8000)
 #define EXTERNAL_RAM_BASE      (0xA000)
 #define WORK_RAM_BASE          (0xC000)
@@ -27,7 +30,7 @@ typedef unsigned short U16;
 #define TIMA                   (0xFF05)    //timer counter
 #define TMA                    (0xFF06)    //timer modulo
 #define TAC                    (0xFF07) // timer control
-#define     TAC_START          		BIT(2) //timer start
+#define     TAC_START                  BIT(2) //timer start
 #define LCD_CTRL_REG           (0xFF40) //LCDC
 #define     BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
 #define     BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
@@ -53,6 +56,9 @@ typedef unsigned short U16;
 #define STACK_BEGIN_ADDR       (0xFFFE)
 #define INT_SWITCH             (0xFFFF)
 
+#define ROM_BANK_SWITCHING     (0x10000)
+
+
 #define BG_CHAR_DATA_SIZE      (0x1000)
 #define BG_CODE_DATA_SIZE      (0x400)
 
@@ -62,7 +68,9 @@ typedef unsigned short U16;
 #define OAM_X_OFFSET           (-8)
 #define OAM_Y_OFFSET           (-16)
 
-#define MEMORY_SIZE            (65536)
+#define MEMORY_SIZE            (0x10000)
+#define SPARE_RAW_SIZE         (0x10000)    //spare space for bank switching
+#define ROM_BANK_SIZE          (0x4000)
 
 #define SCREEN_OFFSET          (10)
 #define LCD_WIDTH              (160)
@@ -137,15 +145,15 @@ class DMGZ80CPU;
 class TILE_DOT_DATA_PAINTER
 {
 public:
-	static DMGZ80CPU *cpu;
+    static DMGZ80CPU *cpu;
 
-	static int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code);
+    static int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code);
     //paint 1 row, 8 dots
     //in BG_TILE_BGI_BUFFER ,each row accommodates 16 tile (128 dots)
     static void paintTileDotData(U16 dot_data_byte_idx, U8 upper_dot_byte, U8 lower_dot_byte)
     {
-		U8 dots_one_row       = 0x7F;   //128 dots in a row
-		U8 dots_one_row_shift = 0x7;    //2^7 = 128 dots in a row
+        U8 dots_one_row       = 0x7F;   //128 dots in a row
+        U8 dots_one_row_shift = 0x7;    //2^7 = 128 dots in a row
         // ---0---  ---8---       --------   --------
         // ---1---  ---9---       --------   --------
         // ---2---  --10---       --------   --------
@@ -164,16 +172,16 @@ public:
         //dot_data_idx = (dot_data_byte_idx >> 1) , because two bytes represent one row
         U16 dot_data_idx = (dot_data_byte_idx >> 1);
         //each tile contains 64 dots
-		// 12 / 7 = 1     -> x_pos = 1*8
+        // 12 / 7 = 1     -> x_pos = 1*8
         int x_pos = BG_TILE_BGI_BUFFER_X + (((dot_data_idx & dots_one_row) >> 3) << 3);
-		// 12 / 128 = 0   -> y_tile_row = 0*8
+        // 12 / 128 = 0   -> y_tile_row = 0*8
         int y_tile_row = (dot_data_idx >> dots_one_row_shift) << 3;
-		// (12 % 8) = 4 -> y_pos = y_row + 4
+        // (12 % 8) = 4 -> y_pos = y_row + 4
         int y_pos = BG_TILE_BGI_BUFFER_Y + y_tile_row + ((dot_data_idx) & 0x7);
         int bgi_color;
         U8  color_code = 0;
 
-		//render one row of a tile
+        //render one row of a tile
         for (int x = x_pos; x < (x_pos + 8); x++)
         {
             color_code = 0;
@@ -194,7 +202,7 @@ public:
     U8  value;
     U16 access_addr;
     U8 _hang;
-	U8 *raw_byte_ptr;
+    U8 *raw_byte_ptr;
     U8DATA()
     {
         value = 0;
@@ -203,7 +211,7 @@ public:
     U8DATA(U8 &val)
     {
         //this->value = val;
-		*(this->raw_byte_ptr) = val;
+        *(this->raw_byte_ptr) = val;
         _hang = true;
     }
     operator U8()
@@ -216,66 +224,66 @@ public:
         }
         else if (access_addr == 0xFF00)
         {
-			if (((*(this->raw_byte_ptr)) & JOY_PAD_RESET) == JOY_PAD_RESET)
-			//if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
-			{
-				//this->value = 0xFF;
-				*(this->raw_byte_ptr) = 0xFF;
-			}
-			else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_DIRECT)
-			//else if (this->value & JOY_PAD_SEL_DIRECT)
-			{
-				if (GetKeyState(VK_RIGHT) < 0)
-				{
-					//this->value &= (~BIT(0));
-					(*(this->raw_byte_ptr)) &= (~BIT(0));
-				}
-				if (GetKeyState(VK_LEFT) < 0) 
-				{
-					//this->value &= (~BIT(1));
-					(*(this->raw_byte_ptr)) &= (~BIT(1));
-				}
-				if (GetKeyState(VK_UP) < 0) 
-				{
-					//this->value &= (~BIT(2));
-					(*(this->raw_byte_ptr)) &= (~BIT(2));
-				}
-				if (GetKeyState(VK_DOWN) < 0) 
-				{
-					//this->value &= (~BIT(3));
-					(*(this->raw_byte_ptr)) &= (~BIT(3));
-				}
-			}
-			else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_BUTTON)
-			//else if (this->value & JOY_PAD_SEL_BUTTON)
-			{
-				if (GetKeyState('A') < 0)
-				{
-					//this->value &= (~BIT(0));
-					(*(this->raw_byte_ptr)) &= (~BIT(0));
-				}
-				if (GetKeyState('S') < 0) 
-				{
-					//this->value &= (~BIT(1));
-					(*(this->raw_byte_ptr)) &= (~BIT(1));
-				}
-				if (GetKeyState(VK_SHIFT) < 0)
-				{
-					//this->value &= (~BIT(2));
-					(*(this->raw_byte_ptr)) &= (~BIT(2));
-				}
-				if (GetKeyState(VK_RETURN) < 0) 
-				{
-					//this->value &= (~BIT(3));
-					(*(this->raw_byte_ptr)) &= (~BIT(3));
-				}
-			}
-			else
-			{
-				//printf("unknown joy sel %04X\n", this->value);
-				//while (_hang);
-			}
-			
+            if (((*(this->raw_byte_ptr)) & JOY_PAD_RESET) == JOY_PAD_RESET)
+            //if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
+            {
+                //this->value = 0xFF;
+                *(this->raw_byte_ptr) = 0xFF;
+            }
+            else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_DIRECT)
+            //else if (this->value & JOY_PAD_SEL_DIRECT)
+            {
+                if (GetKeyState(VK_RIGHT) < 0)
+                {
+                    //this->value &= (~BIT(0));
+                    (*(this->raw_byte_ptr)) &= (~BIT(0));
+                }
+                if (GetKeyState(VK_LEFT) < 0) 
+                {
+                    //this->value &= (~BIT(1));
+                    (*(this->raw_byte_ptr)) &= (~BIT(1));
+                }
+                if (GetKeyState(VK_UP) < 0) 
+                {
+                    //this->value &= (~BIT(2));
+                    (*(this->raw_byte_ptr)) &= (~BIT(2));
+                }
+                if (GetKeyState(VK_DOWN) < 0) 
+                {
+                    //this->value &= (~BIT(3));
+                    (*(this->raw_byte_ptr)) &= (~BIT(3));
+                }
+            }
+            else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_BUTTON)
+            //else if (this->value & JOY_PAD_SEL_BUTTON)
+            {
+                if (GetKeyState('A') < 0)
+                {
+                    //this->value &= (~BIT(0));
+                    (*(this->raw_byte_ptr)) &= (~BIT(0));
+                }
+                if (GetKeyState('S') < 0) 
+                {
+                    //this->value &= (~BIT(1));
+                    (*(this->raw_byte_ptr)) &= (~BIT(1));
+                }
+                if (GetKeyState(VK_SHIFT) < 0)
+                {
+                    //this->value &= (~BIT(2));
+                    (*(this->raw_byte_ptr)) &= (~BIT(2));
+                }
+                if (GetKeyState(VK_RETURN) < 0) 
+                {
+                    //this->value &= (~BIT(3));
+                    (*(this->raw_byte_ptr)) &= (~BIT(3));
+                }
+            }
+            else
+            {
+                //printf("unknown joy sel %04X\n", this->value);
+                //while (_hang);
+            }
+            
         }
         //return this->value;
         return (*(this->raw_byte_ptr));
@@ -294,26 +302,47 @@ DMGZ80CPU              *U8DATA::cpu;
 TILE_DOT_DATA_PAINTER  *U8DATA::tile_dot_data_painter;
 DMGZ80CPU              *TILE_DOT_DATA_PAINTER::cpu;
 
+//memory bank controller
+typedef struct mbc1_struct
+{
+    U16 register0;
+    //rom bank code, write addr : 2000h~3FFFh, write data : 01h~1Fh
+    U16 register1;
+    //Upper ROM bank code when using 8 Mbits or more of ROM (and register 3is 0)
+    //The upper ROM banks can be selected in 512-Kbyte increments.
+    //  Write value of 0 selects banks 01h - 1Fh
+    //    Write value of 1 selects banks 21h - 3Fh
+    //    Write value of 2 selects banks 41h - 5Fh
+    //    Write value of 3 selects banks 61h - 7Fh
+    U16 register2;
+    //ROM / RAM change
+    //  Write addresses : 6000h - 7FFFh Write Data : 0 - 1
+    //    Writing 0 causes the register 2 output to control switching of the higher ROM
+    //    bank.
+    //    Writing 1 causes the register 2 output to control switching of the RAM bank
+    U16 register3;
+}MBC1;
+
 class DEBUG_MEM
 {
 public:
 
     //U16 access_addr;
     U8DATA  data[MEMORY_SIZE];
-	U8      raw_byte_data[MEMORY_SIZE];
-    U8  _hang;
+    U8      raw_byte_data[MEMORY_SIZE + SPARE_RAW_SIZE];
     U8DATA  *stack;
+    //memory bank controller
+    MBC1    mbc1;
     DEBUG_MEM()
     {
-        _hang = true;
         stack = data + 0xCFF0;
         //access_addr = 0;
-		memset((void*)raw_byte_data, 0x00, sizeof(U8) * MEMORY_SIZE);
-		//point to each raw byte
-		for (int i = 0; i < MEMORY_SIZE; i++) 
-		{
-			data[i].raw_byte_ptr = &raw_byte_data[i];
-		}
+        memset((void*)raw_byte_data, 0x00, sizeof(U8) * MEMORY_SIZE);
+        //point to each raw byte
+        for (int i = 0; i < MEMORY_SIZE; i++) 
+        {
+            data[i].raw_byte_ptr = &raw_byte_data[i];
+        }
 
     }
     U8DATA &operator[](U16 addr)
@@ -339,21 +368,21 @@ typedef struct oam_entry_struct
 
 typedef struct debug_log 
 {
-	AF af;
-	BC bc;
-	DE de;
-	HL hl;
-	U16 pc;
-	U16 sp;
+    U16 pc;
+    U16 sp;
+    AF af;
+    BC bc;
+    DE de;
+    HL hl;
 }DEBUGLOG;
 
 class DMGZ80CPU
 {
 private:
-	//debug
-	DEBUGLOG log[8192];
+    //debug
+    DEBUGLOG log[8192];
 
-	DEBUGLOG current_log;
+    DEBUGLOG current_log;
 
     //U8 memory[MEMORY_SIZE];
     //register
@@ -377,15 +406,16 @@ private:
     U8               tile_data_built;
 
 public:
-    U16 pc;
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
+    MBC1      mbc1;
+    U16       pc;
     DMGZ80CPU()
     {
         U8DATA::pc = &this->pc;
         U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
         U8DATA::cpu = this;
-		TILE_DOT_DATA_PAINTER::cpu = this;
+        TILE_DOT_DATA_PAINTER::cpu = this;
 
         ime = TRUE;
 
@@ -466,30 +496,50 @@ public:
     void readROM(std::string filename)
     {
         std::ifstream fin;
-        int rom_size;
+        int cartridge_rom_size;
         U8  one_byte;
 
 
         fin.open(filename.c_str(), std::ios::ate | std::ios::binary);
         //get rom size
-        rom_size = fin.tellg();
-        //move pointer to beginning of rom
-        fin.seekg(0, fin.beg);
+        cartridge_rom_size = fin.tellg();
 
-		//copy bulk
-		fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), rom_size);
 
         //move pointer to beginning of rom
         fin.seekg(0, fin.beg);
+        //bulk copy to Z80 ram , if cartridge_rom_size was larger than 32k ,copy only 32k to Z80 RAM
+        fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), (cartridge_rom_size > ROM_IN_Z80_SIZE) ? ROM_IN_Z80_SIZE : cartridge_rom_size);
+        
+
+        //mario rom         |-bank0-|-bank1-|-bank2-|-bank3-| 64k
+        //z80 ram           |-bank0-|-bank1-|---------------| 64k
+        //                                  ^32k
+        //spare_rom         |-bank1-|-bank2-|-bank3-|-bank4-| 64k
+        //if rom size was larger than 32k, it means than it maybe bank-switched (bank1~ bank4) later,
+        if(cartridge_rom_size > ROM_IN_Z80_SIZE)
+        {
+            //move pointer to beginning of bank1
+            fin.seekg(ROM_BANK_SIZE, fin.beg);
+            //store remaining rom data at 0x10000
+            fin.read((char *)(memory[0].raw_byte_ptr + ROM_BANK_SWITCHING), cartridge_rom_size - ROM_BANK_SIZE);
+        }
+
+
+
+        //move pointer to beginning of rom
+        /*fin.seekg(0, fin.beg);
 
         for (int i = 0; i < rom_size; i++)
         {
-			//assign one to one
+            //assign one to one
             fin.read((char *)(&one_byte), sizeof(one_byte));
             memory[i] = one_byte;
         }
+
+        */
         fin.close();
 
+        //show initial 64 bytes
         printMEM(0, 64);
 
     }
@@ -730,11 +780,11 @@ public:
         buildBackground();
     }*/
 
-	//LCD timing
-	//Mode2 OAM  O_____O_____O_____O_____O_____O___________________O____
-	//Mode3 DMA  _DD____DD____DD____DD____DD____DD__________________D___
-	//Mode0 H    ___HHH___HHH___HHH___HHH___HHH___HHH________________HHH
-	//Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
+    //LCD timing
+    //Mode2 OAM  O_____O_____O_____O_____O_____O___________________O____
+    //Mode3 DMA  _DD____DD____DD____DD____DD____DD__________________D___
+    //Mode0 H    ___HHH___HHH___HHH___HHH___HHH___HHH________________HHH
+    //Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
     void update_lcd_y_coord()
     {
         if ((cpu_cycles & 0x3F) == 0)
@@ -759,22 +809,22 @@ public:
         // 0b11 -> freq / 2^8
         U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
 
-		if ((cpu_cycles & timer_mod_mask) == 0)
-		{
-			if (memory[TAC] & TAC_START) 
-			{
-				memory[TIMA] = memory[TIMA] + 1;
-			}
+        if ((cpu_cycles & timer_mod_mask) == 0)
+        {
+            if (memory[TAC] & TAC_START) 
+            {
+                memory[TIMA] = memory[TIMA] + 1;
+            }
             //printf("timer int cpu_cycles = %X, ", cpu_cycles);
             //printf(" memory[TIMA] = %X\n", (U8)(memory[TIMA]));
         }
 
-		//update div
-		memory[DIV] = (cpu_cycles & 0xFF00) >> 8;
+        //update div
+        memory[DIV] = (cpu_cycles & 0xFF00) >> 8;
     }
     void check_interrupt_and_dispatch_isr()
     {
-		U8 lcd_int_mode;
+        U8 lcd_int_mode;
         //memory[INT_FLAGS_ADDR];
         //memory[INT_SWITCH_BASE];
 
@@ -804,7 +854,7 @@ public:
             }
         }
 
-		
+        
         //timer interupt ISR = 0x50
         if (memory[TIMA] == 0xFF)
         {
@@ -871,28 +921,28 @@ public:
         getimage(BG_X + scx, BG_Y + scy, BG_X + scx + LCD_WIDTH, BG_Y + scy + LCD_HEIGHT, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
     }
-	//
-	bool isFocused() 
-	{
-		char wnd_title[256];
-		char correct_window_title[] = "gameboy_emulator";
-		HWND hwnd = GetForegroundWindow();
+    //
+    bool isFocused() 
+    {
+        char wnd_title[256];
+        char correct_window_title[] = "gameboy_emulator";
+        HWND hwnd = GetForegroundWindow();
 
-		GetWindowText(hwnd, wnd_title, sizeof(wnd_title));
+        GetWindowText(hwnd, wnd_title, sizeof(wnd_title));
 
 
-		if (strncmp(correct_window_title, wnd_title, 10) == 0) 
-		{
-		//printf("*%s\n", wnd_title);
-		//printf("-%s\n", correct_window_title);
-			return TRUE;
-		}
-		else 
-		{
-			return FALSE;
-		}
+        if (strncmp(correct_window_title, wnd_title, 10) == 0) 
+        {
+        //printf("*%s\n", wnd_title);
+        //printf("-%s\n", correct_window_title);
+            return TRUE;
+        }
+        else 
+        {
+            return FALSE;
+        }
 
-	}
+    }
     void run()
     {
         U8    opcode, xx;
@@ -906,7 +956,7 @@ public:
         U8    ly = memory[LCD_Y_COORD_REG];
 
 
-		int log_idx = 0;
+        int log_idx = 0;
 
         U8    _debug = true;        
         U8 showpc = 0;
@@ -918,11 +968,11 @@ public:
         //each loop takes about 0.0005 ms
         while (TRUE)
         {
-			//if (this->isFocused() == FALSE) 
-			//{
-			//	printf("not focus\n");
-			//	continue;
-			//}
+            //if (this->isFocused() == FALSE) 
+            //{
+            //    printf("not focus\n");
+            //    continue;
+            //}
             //STOP instruction takes the highest priority
             //if stop_state is met, do not do any action
             //if (stop_state == TRUE) 
@@ -958,20 +1008,20 @@ public:
                 ly = memory[LCD_Y_COORD_REG];
 
 
-				if (log_idx == 8192) 
-				{
-					log_idx = 0;
-				}
-				log[log_idx].af = this->af;
-				log[log_idx].bc = this->bc;
-				log[log_idx].de = this->de;
-				log[log_idx].hl = this->hl;
-				log[log_idx].pc = this->pc;
-				log[log_idx].sp = this->sp;
+                if (log_idx == 8192) 
+                {
+                    log_idx = 0;
+                }
+                log[log_idx].af = this->af;
+                log[log_idx].bc = this->bc;
+                log[log_idx].de = this->de;
+                log[log_idx].hl = this->hl;
+                log[log_idx].pc = this->pc;
+                log[log_idx].sp = this->sp;
 
-				current_log = log[log_idx];
+                current_log = log[log_idx];
 
-				log_idx++;
+                log_idx++;
                 if(showpc)
                     printREG();
                 switch (opcode)
@@ -1429,8 +1479,7 @@ public:
                     //load (aabb) with A
                 case 0xEA:
                     //cpu_cycles += 4;
-					if (aabb > CARTRIDGE_ROM_END)
-						memory[aabb] = af.a;
+                    memory[aabb] = af.a;
                     pc += 3;
                     //printf("load (aabb) with A  \n");
                     break;
@@ -2297,7 +2346,7 @@ public:
                     break;
                 default:
                     printf("unknown opcode : %02X\n", opcode);
-					while (1);
+                    while (1);
                     break;
 
                 }
@@ -2320,22 +2369,12 @@ public:
 
 U8DATA &U8DATA::operator=(U8 val)
 {
-	//this area is read-only, the only to access this area is by DEBUG_MEM->raw_byte_data[MEMORY_SIZE] ,like "fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), rom_size);"
-	//if (this->access_addr <= CARTRIDGE_ROM_END) 
-	//{
-	//	return (*this);
-	//}
 
-	if ((this->access_addr == 0x37) && (val == 0x39))
-	{
-		printf("pc = %04X\n",this->cpu->pc);
-	}
-    
-    U8 _hang = true;
-   
 
-    U16 bg_tile_ram_end_eddr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
-    if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_eddr)))
+
+    U16 bg_tile_ram_end_addr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
+    //8000h ~ A000h
+    if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_addr)))
         //if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
     {
         //we need to collect two byte before painting one row
@@ -2349,13 +2388,13 @@ U8DATA &U8DATA::operator=(U8 val)
             tile_dot_data_painter->paintTileDotData(access_addr, (U8)(cpu->memory[access_addr - 1]), val);
         }
         //this->value = val;
-		(*(this->raw_byte_ptr)) = val;
+        (*(this->raw_byte_ptr)) = val;
     }
     else if (access_addr == JOY_PAD) //0xFF00
     {
         //reset joy pad
         //this->value = val | 0xCF;
-		(*(this->raw_byte_ptr)) = val | 0xCF;
+        (*(this->raw_byte_ptr)) = val | 0xCF;
     }
     else if (access_addr == DMA) //0xFF46
     {
@@ -2368,13 +2407,35 @@ U8DATA &U8DATA::operator=(U8 val)
             this->cpu->memory[OAM + idx] = this->cpu->memory[src_addr + idx];
         }
         //this->value = val;
-		(*(this->raw_byte_ptr)) = val;
+        (*(this->raw_byte_ptr)) = val;
+    }
+    //this area is read-only, the only case to access this area is by DEBUG_MEM->raw_byte_data[MEMORY_SIZE] ,like "fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), rom_size);"
+    //0000h ~ 8000h
+    else if (this->access_addr <= ROM_END)
+    {
+        //for MBC 
+        if (this->access_addr == MBC1_REGISTER_1)
+        {
+            this->cpu->memory.mbc1.register1 = val;
+            //bank switching
+            void *bank_tgt_addr = (void *)&this->cpu->memory.raw_byte_data[ROM_BANK1_START];
+            // (val - 1) because bank0 is not stored here, I only store bank1 bank2 bank3
+            void *bank_src_addr = (void *)&this->cpu->memory.raw_byte_data[ROM_BANK_SWITCHING + (val - 1) * ROM_BANK_SIZE];
+
+            memcpy(bank_tgt_addr, bank_src_addr, ROM_BANK_SIZE);
+
+        }
+        else
+        {
+            //normal read-only ram case
+        }
+        return (*this);
     }
     //normal assignment
     else
     {
         //this->value = val;
-		(*(this->raw_byte_ptr)) = val;
+        (*(this->raw_byte_ptr)) = val;
     }
     return (*this);
 }
@@ -2383,32 +2444,32 @@ U8DATA &U8DATA::operator=(U8 val)
 
 int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code)
 {
-	U8  color_code;
-	int color;
-	U8  bg_palette_color = TILE_DOT_DATA_PAINTER::cpu->memory[BG_PALETTE_DATA];
-	U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+    U8  color_code;
+    int color;
+    U8  bg_palette_color = TILE_DOT_DATA_PAINTER::cpu->memory[BG_PALETTE_DATA];
+    U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
 
-	//palette color code -> color code
-	color_code = palette_code_to_color_code[palette_color_code];
+    //palette color code -> color code
+    color_code = palette_code_to_color_code[palette_color_code];
 
-	//color code -> color
-	switch (color_code)
-	{
-	case 0x0:
-		color = COLOR(230, 230, 230);
-		break;
-	case 0x2:
-		color = COLOR(154, 154, 154);
-		break;
-	case 0x1:
-		color = COLOR(77, 77, 77);
-		break;
-	case 0x3:
-		color = COLOR(0, 0, 0);
-		break;
-	default:
-		//printf("unknown color code\n");
-		break;
-	}
-	return color;
+    //color code -> color
+    switch (color_code)
+    {
+    case 0x0:
+        color = COLOR(230, 230, 230);
+        break;
+    case 0x2:
+        color = COLOR(154, 154, 154);
+        break;
+    case 0x1:
+        color = COLOR(77, 77, 77);
+        break;
+    case 0x3:
+        color = COLOR(0, 0, 0);
+        break;
+    default:
+        //printf("unknown color code\n");
+        break;
+    }
+    return color;
 }
