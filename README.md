@@ -1,4 +1,4 @@
 # gameboy_emulator
 
 ![image](gameboy_emulator.gif)
-![image](mario.PNG)
+![image](gameboy_emulator_mario.gif)
