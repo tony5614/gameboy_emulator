@@ -420,16 +420,16 @@ public:
     U8               tile_data_built;
 
 
-	int log_idx;
+    int log_idx;
 
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
     MBC1      mbc1;
     U16       pc;
-	std::map<U8, U8>  ly_scx_map;
-	U8  ly_map[3];
-	U8  scx_map[3];
-	U8  fixed_ly;
+    std::map<U8, U8>  ly_scx_map;
+    U8  ly_map[3];
+    U8  scx_map[3];
+    U8  fixed_ly;
     enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL};
     DMGZ80CPU()
     {
@@ -455,7 +455,7 @@ public:
         cpu_cycles = 0;
         refresh_lcd = FALSE;
         
-		log_idx = 0;
+        log_idx = 0;
 
         /*
         sp = STACK_BEGIN_ADDR;
@@ -811,7 +811,7 @@ public:
     //Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
     void update_lcd_y_coord()
     {
-		//this mask controls frame rate
+        //this mask controls frame rate
         if ((cpu_cycles & 0x3F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
@@ -876,7 +876,7 @@ public:
                 pc = ISR_VERTICAL_BLANKING;
                 //clear flag if the interrupt is served by isr
                 memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_VERT_BLANKING);
-				//printf("ISR_VERTICAL_BLANKING(%04X)\n", ISR_VERTICAL_BLANKING);
+                //printf("ISR_VERTICAL_BLANKING(%04X)\n", ISR_VERTICAL_BLANKING);
             }
         }
 
@@ -889,10 +889,10 @@ public:
         {
             if(memory[LY] == memory[LYC])
             {
-				//because only when every 0x7F cpu cycles, can memory[LY] increment by 1
-				//in order to preventing from triggering interrupt multiple times
-				//increment memory[LY]  by 1 ,right after interrupt triggered
-				memory[LY] = memory[LY] + 1;
+                //because only when every 0x7F cpu cycles, can memory[LY] increment by 1
+                //in order to preventing from triggering interrupt multiple times
+                //increment memory[LY]  by 1 ,right after interrupt triggered
+                memory[LY] = memory[LY] + 1;
                 //wake from halt_state
                 halt_state = FALSE;
 
@@ -908,10 +908,10 @@ public:
                     //clear flag if the interrupt is served by isr
                     memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_LCDC);
 
-					//printf("ISR_LCDC(%04X)\n", ISR_LCDC);
+                    //printf("ISR_LCDC(%04X)\n", ISR_LCDC);
                     //printf("goto isr = %X\n", pc);
 
-					memory[LCD_STAT] = memory[LCD_STAT] | LCD_MATCH_FLAG;
+                    memory[LCD_STAT] = memory[LCD_STAT] | LCD_MATCH_FLAG;
                 }
             }
         }
@@ -1011,10 +1011,9 @@ public:
             oam_entry_4_byte[3] = memory[OAM + i * sizeof(OAM_ENTRY) + 3];
             oam_entry_ptr = (OAM_ENTRY*)oam_entry_4_byte;
 
-
             getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
-            putimage(BG_X+ OAM_X_OFFSET + oam_entry_ptr->pos_x, BG_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
-            rectangle(BG_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, BG_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, BG_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, BG_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
+            putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
+            //rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
             
         }
     }
@@ -1025,72 +1024,74 @@ public:
         //printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
         buildBackground();
 
-        //render sprite ,OAM
-        updateOAM();
 
         //viewport
         int scy = memory[SCY];
         int scx = memory[SCX];
 
 
-		int viewport_x_end = BG_X + scx + LCD_WIDTH - 1;
-		int viewport_y_end = BG_Y + scy + LCD_HEIGHT - 1;
-		int wrap_x_width;
-		int wrap_y_height;
+        int viewport_x_end = BG_X + scx + LCD_WIDTH - 1;
+        int viewport_y_end = BG_Y + scy + LCD_HEIGHT - 1;
+        int wrap_x_width;
+        int wrap_y_height;
 
-		//for ly == lyc effect
+        //for ly == lyc effect
 
-		// ly   scx
-		// 0    0
-		// 0xF  0x26
-		// 160  0
-		//
-		// part0 ly=0~0xF   , scx=0
-		// part1 ly=0xF~160 , scx=0x26
+        // ly   scx
+        // 0    0
+        // 0xF  0x26
+        // 160  0
+        //
+        // part0 ly=0~0xF   , scx=0
+        // part1 ly=0xF~160 , scx=0x26
 
-		//
-		std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
-		this->ly_scx_map[LCD_WIDTH] = 0;	
-		
-		if(viewport_x_end < BG_WIDTH)
-		{
-			getimage(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end, viewport_buf_ptr);
-		}
-		else
-		{
-			getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end, viewport_buf_ptr);
-		}
-
-
-		putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
-
-		//wrap part
-		if (viewport_x_end > BG_WIDTH)
-		{
-			wrap_x_width   = viewport_x_end - BG_WIDTH;
-			viewport_x_end = BG_WIDTH;
-
-			getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
-			putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
-
-			rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
-		}
-		
-		
-		//getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
-		getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
-		putimage(VIEWPORT_X , VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+        //
+        std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
+        this->ly_scx_map[LCD_WIDTH] = 0;    
+        
+        if(viewport_x_end < BG_WIDTH)
+        {
+            getimage(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end, viewport_buf_ptr);
+        }
+        else
+        {
+            getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end, viewport_buf_ptr);
+        }
 
 
-		if (viewport_x_end < BG_WIDTH)
-		{
-			rectangle(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end);
-		}
-		else
-		{
-			rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end);
-		}
-		
+        putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+        //wrap part
+        if (viewport_x_end > BG_WIDTH)
+        {
+            wrap_x_width   = viewport_x_end - BG_WIDTH;
+            viewport_x_end = BG_WIDTH;
+
+            getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
+            putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+            rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
+        }
+        
+        
+        //getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
+        getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
+        putimage(VIEWPORT_X , VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+
+        if (viewport_x_end < BG_WIDTH)
+        {
+            rectangle(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end);
+        }
+        else
+        {
+            rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end);
+        }
+
+
+        //render sprite ,OAM
+        updateOAM();
+        
     }
     //
     bool isFocused() 
@@ -2295,8 +2296,8 @@ public:
                     sp += 2;
                     //auto enable ime
                     this->ime = 1;
-					//clear match flag
-					memory[LCD_STAT] = memory[LCD_STAT] & (~LCD_MATCH_FLAG);
+                    //clear match flag
+                    memory[LCD_STAT] = memory[LCD_STAT] & (~LCD_MATCH_FLAG);
                     break;
 
                     //RLA
@@ -2549,7 +2550,7 @@ public:
 
 U8DATA &U8DATA::operator=(U8 val)
 {
-	U16 bg_tile_ram_end_addr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
+    U16 bg_tile_ram_end_addr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
     //8000h ~ A000h
     if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_addr)))
         //if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
@@ -2607,26 +2608,26 @@ U8DATA &U8DATA::operator=(U8 val)
         }
         return (*this);
     }
-	else if (this->access_addr == SCX)
-	{
-		//in order to implement that each scanline(ly) corresponds to different scx
-		//because my rendering system is not rendering line by line
-		//emulator can only collect all <ly,scx> pair
-		//and at last, rendering screen all at once
-		U8 cur_ly;
-		U8 scx;
-		if (this->cpu->memory[LCD_STAT] & LCD_MATCH_FLAG)
-		{
-			cur_ly = this->cpu->memory[LY];
-			scx = val;
-			this->cpu->ly_scx_map[cur_ly] = scx;
-			this->cpu->fixed_ly = cur_ly;
-			//printf("pc: %04X  (ly , scx) = (%d , %d)\n",this->cpu->pc, cur_ly, scx);
-		}
+    else if (this->access_addr == SCX)
+    {
+        //in order to implement that each scanline(ly) corresponds to different scx
+        //because my rendering system is not rendering line by line
+        //emulator can only collect all <ly,scx> pair
+        //and at last, rendering screen all at once
+        U8 cur_ly;
+        U8 scx;
+        if (this->cpu->memory[LCD_STAT] & LCD_MATCH_FLAG)
+        {
+            cur_ly = this->cpu->memory[LY];
+            scx = val;
+            this->cpu->ly_scx_map[cur_ly] = scx;
+            this->cpu->fixed_ly = cur_ly;
+            //printf("pc: %04X  (ly , scx) = (%d , %d)\n",this->cpu->pc, cur_ly, scx);
+        }
 
         (*(this->raw_byte_ptr)) = val;
         return (*this);
-	}
+    }
     //normal assignment
     else
     {
