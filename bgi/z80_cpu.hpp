@@ -38,6 +38,7 @@ typedef unsigned short U16;
 #define     BG_WIN_ON_FALG         BIT(5)   //window on Flag
 #define     BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
 #define LCD_STAT               (0xFF41) //STAT
+#define     LCD_MATCH_FLAG         BIT(2)//LY == LYC
 #define     LCD_INT_H_BLNK         BIT(3)
 #define     LCD_INT_V_BLNK         BIT(4)
 #define     LCD_INT_OAM            BIT(5)
@@ -81,6 +82,9 @@ typedef unsigned short U16;
 #define BG_HEIGHT              (256)
 #define VIEWPORT_X             (390)
 #define VIEWPORT_Y             (0)
+#define TWO_PASS_RENDER_X      (0)
+#define TWO_PASS_RENDER_Y      (512)
+
 
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BGI_BUFFER_X   (256)
@@ -387,7 +391,7 @@ typedef struct debug_log
 
 class DMGZ80CPU
 {
-private:
+public:
     //debug
     DEBUGLOG log[8192];
 
@@ -415,12 +419,17 @@ private:
     unsigned int     cpu_cycles;
     U8               tile_data_built;
 
-public:
+
+	int log_idx;
+
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
     MBC1      mbc1;
     U16       pc;
-	std::map<U8,U8>  ly_scx_map;
+	std::map<U8, U8>  ly_scx_map;
+	U8  ly_map[3];
+	U8  scx_map[3];
+	U8  fixed_ly;
     enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL};
     DMGZ80CPU()
     {
@@ -446,7 +455,7 @@ public:
         cpu_cycles = 0;
         refresh_lcd = FALSE;
         
-		
+		log_idx = 0;
 
         /*
         sp = STACK_BEGIN_ADDR;
@@ -855,7 +864,7 @@ public:
             memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_VERT_BLANKING);
 
             //trigger refresh lcd, only one time
-            if ((cpu_cycles & 0x1FF) == 0)
+            if ((cpu_cycles & 0xFF) == 0)
                 this->refresh_lcd = TRUE;
             
             //check if int master enable and vbank int is enabled
@@ -867,6 +876,7 @@ public:
                 pc = ISR_VERTICAL_BLANKING;
                 //clear flag if the interrupt is served by isr
                 memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_VERT_BLANKING);
+				//printf("ISR_VERTICAL_BLANKING(%04X)\n", ISR_VERTICAL_BLANKING);
             }
         }
 
@@ -879,6 +889,10 @@ public:
         {
             if(memory[LY] == memory[LYC])
             {
+				//because only when every 0x7F cpu cycles, can memory[LY] increment by 1
+				//in order to preventing from triggering interrupt multiple times
+				//increment memory[LY]  by 1 ,right after interrupt triggered
+				memory[LY] = memory[LY] + 1;
                 //wake from halt_state
                 halt_state = FALSE;
 
@@ -894,7 +908,10 @@ public:
                     //clear flag if the interrupt is served by isr
                     memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_LCDC);
 
+					//printf("ISR_LCDC(%04X)\n", ISR_LCDC);
                     //printf("goto isr = %X\n", pc);
+
+					memory[LCD_STAT] = memory[LCD_STAT] | LCD_MATCH_FLAG;
                 }
             }
         }
@@ -1016,14 +1033,13 @@ public:
         int scx = memory[SCX];
 
 
-		int viewport_max_x = BG_X + scx + LCD_WIDTH - 1;
-		int viewport_max_y = BG_Y + scy + LCD_HEIGHT - 1;
+		int viewport_x_end = BG_X + scx + LCD_WIDTH - 1;
+		int viewport_y_end = BG_Y + scy + LCD_HEIGHT - 1;
 		int wrap_x_width;
 		int wrap_y_height;
 
 		//for ly == lyc effect
-		std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
-		this->ly_scx_map[LCD_WIDTH] = 0;
+
 		// ly   scx
 		// 0    0
 		// 0xF  0x26
@@ -1033,65 +1049,48 @@ public:
 		// part1 ly=0xF~160 , scx=0x26
 
 		//
-		/*
-		for (std::map<U8,U8>::iterator iter = this->ly_scx_map.begin(); iter != this->ly_scx_map.end(); iter++)
+		std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
+		this->ly_scx_map[LCD_WIDTH] = 0;	
+		
+		if(viewport_x_end < BG_WIDTH)
 		{
-			U16 crop_left = BG_X + last_ly_scx.second;
-			U16 crop_top = BG_Y + scy;
-			U16 crop_right = viewport_max_x;
-			U16 crop_bottom = crop_top + (*iter).first;
-
-			getimage(crop_left, crop_top, crop_right, crop_bottom, viewport_buf_ptr);
-			rectangle(crop_left, crop_top, crop_right, crop_bottom);
-
-			U16 paste_left = VIEWPORT_X;
-			U16 paste_top = VIEWPORT_Y + last_ly_scx.first;
-
-			putimage(paste_left, paste_top, viewport_buf_ptr, COPY_PUT);
-			rectangle(paste_left, paste_top, paste_left + 2, paste_top + 2);
-
-			last_ly_scx = *iter;
-		}*/
-
-		//
-		if(viewport_max_x < BG_WIDTH)
-		{
-			getimage(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y, viewport_buf_ptr);
+			getimage(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end, viewport_buf_ptr);
 		}
 		else
 		{
-			getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_max_y, viewport_buf_ptr);
+			getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end, viewport_buf_ptr);
 		}
 
 
 		putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
 		//wrap part
-		if (viewport_max_x > BG_WIDTH)
+		if (viewport_x_end > BG_WIDTH)
 		{
-			wrap_x_width   = viewport_max_x - BG_WIDTH;
-			viewport_max_x = BG_WIDTH;
+			wrap_x_width   = viewport_x_end - BG_WIDTH;
+			viewport_x_end = BG_WIDTH;
 
-			getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_max_y, viewport_buf_ptr);
+			getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
 			putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
-			rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_max_y);
+			rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
 		}
-		rectangle(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y);
 		
+		
+		//getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
+		getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
+		putimage(VIEWPORT_X , VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
 
-		if (viewport_max_x < BG_WIDTH)
+		if (viewport_x_end < BG_WIDTH)
 		{
-			rectangle(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y);
+			rectangle(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end);
 		}
 		else
 		{
-			rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_max_y);
+			rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end);
 		}
-
-		//clear
-		this->ly_scx_map.clear();
+		
     }
     //
     bool isFocused() 
@@ -1128,7 +1127,6 @@ public:
         U8    ly = memory[LY];
 
 
-        int log_idx = 0;
 
         U8    _debug = true;        
         U8 showpc = 0;
@@ -2297,6 +2295,8 @@ public:
                     sp += 2;
                     //auto enable ime
                     this->ime = 1;
+					//clear match flag
+					memory[LCD_STAT] = memory[LCD_STAT] & (~LCD_MATCH_FLAG);
                     break;
 
                     //RLA
@@ -2607,7 +2607,7 @@ U8DATA &U8DATA::operator=(U8 val)
         }
         return (*this);
     }
-	else if(this->access_addr == SCX)
+	else if (this->access_addr == SCX)
 	{
 		//in order to implement that each scanline(ly) corresponds to different scx
 		//because my rendering system is not rendering line by line
@@ -2615,10 +2615,14 @@ U8DATA &U8DATA::operator=(U8 val)
 		//and at last, rendering screen all at once
 		U8 cur_ly;
 		U8 scx;
-
-		cur_ly = this->cpu->memory[LY];
-		scx = val;
-		this->cpu->ly_scx_map[cur_ly] = scx;
+		if (this->cpu->memory[LCD_STAT] & LCD_MATCH_FLAG)
+		{
+			cur_ly = this->cpu->memory[LY];
+			scx = val;
+			this->cpu->ly_scx_map[cur_ly] = scx;
+			this->cpu->fixed_ly = cur_ly;
+			//printf("pc: %04X  (ly , scx) = (%d , %d)\n",this->cpu->pc, cur_ly, scx);
+		}
 
         (*(this->raw_byte_ptr)) = val;
         return (*this);
