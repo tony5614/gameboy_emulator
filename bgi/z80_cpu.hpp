@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <map>
 
 
 typedef unsigned char  U8;
@@ -76,6 +77,8 @@ typedef unsigned short U16;
 #define SCREEN_OFFSET          (10)
 #define LCD_WIDTH              (160)
 #define LCD_HEIGHT             (144)
+#define BG_WIDTH               (256)
+#define BG_HEIGHT              (256)
 #define VIEWPORT_X             (390)
 #define VIEWPORT_Y             (0)
 
@@ -417,6 +420,7 @@ public:
     DEBUG_MEM memory;
     MBC1      mbc1;
     U16       pc;
+	std::map<U8,U8>  ly_scx_map;
     enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL};
     DMGZ80CPU()
     {
@@ -442,6 +446,7 @@ public:
         cpu_cycles = 0;
         refresh_lcd = FALSE;
         
+		
 
         /*
         sp = STACK_BEGIN_ADDR;
@@ -756,7 +761,7 @@ public:
     //takes about 79800 cpu cycles
     void buildBackground()
     {
-        U16    tile_no; //BG MAP , tile number, chr_code
+        U16   tile_no; //BG MAP , tile number, chr_code
         U16   bg_disp_data_addr = ((memory[LCD_CTRL_REG] & BG_CODE_SEL_FALG) ? 0x9C00 : 0x9800);
         U16   bg_tile_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
 
@@ -797,6 +802,7 @@ public:
     //Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
     void update_lcd_y_coord()
     {
+		//this mask controls frame rate
         if ((cpu_cycles & 0x3F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
@@ -1008,9 +1014,84 @@ public:
         //viewport
         int scy = memory[SCY];
         int scx = memory[SCX];
-        //getimage(scx, scy, scx + LCD_WIDTH, scy + LCD_HEIGHT, viewport_buf_ptr);
-        getimage(BG_X + scx, BG_Y + scy, BG_X + scx + LCD_WIDTH, BG_Y + scy + LCD_HEIGHT, viewport_buf_ptr);
-        putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+
+		int viewport_max_x = BG_X + scx + LCD_WIDTH - 1;
+		int viewport_max_y = BG_Y + scy + LCD_HEIGHT - 1;
+		int wrap_x_width;
+		int wrap_y_height;
+
+		//for ly == lyc effect
+		std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
+		this->ly_scx_map[LCD_WIDTH] = 0;
+		// ly   scx
+		// 0    0
+		// 0xF  0x26
+		// 160  0
+		//
+		// part0 ly=0~0xF   , scx=0
+		// part1 ly=0xF~160 , scx=0x26
+
+		//
+		/*
+		for (std::map<U8,U8>::iterator iter = this->ly_scx_map.begin(); iter != this->ly_scx_map.end(); iter++)
+		{
+			U16 crop_left = BG_X + last_ly_scx.second;
+			U16 crop_top = BG_Y + scy;
+			U16 crop_right = viewport_max_x;
+			U16 crop_bottom = crop_top + (*iter).first;
+
+			getimage(crop_left, crop_top, crop_right, crop_bottom, viewport_buf_ptr);
+			rectangle(crop_left, crop_top, crop_right, crop_bottom);
+
+			U16 paste_left = VIEWPORT_X;
+			U16 paste_top = VIEWPORT_Y + last_ly_scx.first;
+
+			putimage(paste_left, paste_top, viewport_buf_ptr, COPY_PUT);
+			rectangle(paste_left, paste_top, paste_left + 2, paste_top + 2);
+
+			last_ly_scx = *iter;
+		}*/
+
+		//
+		if(viewport_max_x < BG_WIDTH)
+		{
+			getimage(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y, viewport_buf_ptr);
+		}
+		else
+		{
+			getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_max_y, viewport_buf_ptr);
+		}
+
+
+		putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+		//wrap part
+		if (viewport_max_x > BG_WIDTH)
+		{
+			wrap_x_width   = viewport_max_x - BG_WIDTH;
+			viewport_max_x = BG_WIDTH;
+
+			getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_max_y, viewport_buf_ptr);
+			putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+
+			rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_max_y);
+		}
+		rectangle(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y);
+		
+
+
+		if (viewport_max_x < BG_WIDTH)
+		{
+			rectangle(BG_X + scx, BG_Y + scy, viewport_max_x, viewport_max_y);
+		}
+		else
+		{
+			rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_max_y);
+		}
+
+		//clear
+		this->ly_scx_map.clear();
     }
     //
     bool isFocused() 
@@ -2468,10 +2549,7 @@ public:
 
 U8DATA &U8DATA::operator=(U8 val)
 {
-
-
-
-    U16 bg_tile_ram_end_addr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
+	U16 bg_tile_ram_end_addr = ((cpu->memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8FFF : 0x97FF);
     //8000h ~ A000h
     if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= bg_tile_ram_end_addr)))
         //if (((VIDEO_RAM_BASE <= access_addr) && (access_addr <= (VIDEO_RAM_BASE + 0x1000))))
@@ -2522,7 +2600,6 @@ U8DATA &U8DATA::operator=(U8 val)
             void *bank_src_addr = (void *)&this->cpu->memory.raw_byte_data[ROM_BANK_SWITCHING + (val - 1) * ROM_BANK_SIZE];
 
             memcpy(bank_tgt_addr, bank_src_addr, ROM_BANK_SIZE);
-
         }
         else
         {
@@ -2530,6 +2607,22 @@ U8DATA &U8DATA::operator=(U8 val)
         }
         return (*this);
     }
+	else if(this->access_addr == SCX)
+	{
+		//in order to implement that each scanline(ly) corresponds to different scx
+		//because my rendering system is not rendering line by line
+		//emulator can only collect all <ly,scx> pair
+		//and at last, rendering screen all at once
+		U8 cur_ly;
+		U8 scx;
+
+		cur_ly = this->cpu->memory[LY];
+		scx = val;
+		this->cpu->ly_scx_map[cur_ly] = scx;
+
+        (*(this->raw_byte_ptr)) = val;
+        return (*this);
+	}
     //normal assignment
     else
     {
