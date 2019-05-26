@@ -534,14 +534,12 @@ public:
         //z80 ram           |-bank0-|-bank1-|---------------| 64k
         //                                  ^32k
         //spare_rom         |-bank1-|-bank2-|-bank3-|-bank4-| 64k
-        //if rom size was larger than 32k, it means than it maybe bank-switched (bank1~ bank4) later,
-        if(cartridge_rom_size > ROM_IN_Z80_SIZE)
-        {
-            //move pointer to beginning of bank1
-            fin.seekg(ROM_BANK_SIZE, fin.beg);
-            //store remaining rom data at 0x10000
-            fin.read((char *)(memory[0].raw_byte_ptr + ROM_BANK_SWITCHING), cartridge_rom_size - ROM_BANK_SIZE);
-        }
+        //back up bank1~bank3 to spare rom
+        //move pointer to beginning of bank1
+        fin.seekg(ROM_BANK_SIZE, fin.beg);
+        //store remaining rom data at 0x10000
+        fin.read((char *)(memory[0].raw_byte_ptr + ROM_BANK_SWITCHING), cartridge_rom_size - ROM_BANK_SIZE);
+
 
 
 
