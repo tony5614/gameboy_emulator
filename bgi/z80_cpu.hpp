@@ -210,20 +210,15 @@ public:
     static DMGZ80CPU              *cpu;
     static TILE_DOT_DATA_PAINTER  *tile_dot_data_painter;
     //-------------------------------
-    U8  value;
     U16 access_addr;
-    U8 _hang;
     U8 *raw_byte_ptr;
     U8DATA()
     {
-        value = 0;
-        _hang = true;
     }
     U8DATA(U8 &val)
     {
         //this->value = val;
         *(this->raw_byte_ptr) = val;
-        _hang = true;
     }
     operator U8()
     {
@@ -419,13 +414,14 @@ public:
     unsigned int     cpu_cycles;
     U8               tile_data_built;
 
-
+	
     int log_idx;
 
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
     MBC1      mbc1;
     U16       pc;
+	U16       debug_pc;
     std::map<U8, U8>  ly_scx_map;
     U8  ly_map[3];
     U8  scx_map[3];
@@ -1013,7 +1009,7 @@ public:
 
             getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
             putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
-            //rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
+            rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
             
         }
     }
