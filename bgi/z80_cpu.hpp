@@ -61,7 +61,7 @@ typedef unsigned short U16;
 
 #define ROM_BANK_SWITCHING     (0x10000)
 
-    
+
 #define BG_CHAR_DATA_SIZE      (0x1000)
 #define BG_CODE_DATA_SIZE      (0x400)
 
@@ -84,7 +84,7 @@ typedef unsigned short U16;
 #define VIEWPORT_Y             (0)
 #define TWO_PASS_RENDER_X      (0)
 #define TWO_PASS_RENDER_Y      (512)
-
+#define PAGE_NUM               (2)
 
 #define DEBUG_WINDOW_WIDTH     (200)
 #define BG_TILE_BGI_BUFFER_X   (256)
@@ -104,6 +104,9 @@ typedef unsigned short U16;
 #define ISR_TIMER              0x50
 #define ISR_SERIEAL_TRANS_CPL  0x58
 #define ISR_P10_P10_INPUT      0x60
+
+#define ASSERT(X)              while (!(X)) {}
+
 
 
 union AF
@@ -163,21 +166,21 @@ public:
     //in BG_TILE_BGI_BUFFER ,each row accommodates 16 tile (128 dots)
     static void paintTileDotData(U16 dot_data_byte_idx, U8 upper_dot_byte, U8 lower_dot_byte)
     {
-        U8 dots_one_row       = 0x7F;   //128 dots in a row
+        U8 dots_one_row = 0x7F;   //128 dots in a row
         U8 dots_one_row_shift = 0x7;    //2^7 = 128 dots in a row
-        // ---0---  ---8---       --------   --------
-        // ---1---  ---9---       --------   --------
-        // ---2---  --10---       --------   --------
-        // ---3---  --11---       --------   --------
-        // ---4---  -+12---       --------   --------
-        // ---5---  --13---       --------   --------
-        // ---6---  --14---       --------   --------
-        // ---7---  --15---   ~   --------   ---127--
-        //             ^-- dot_data_idx = 12      ^---- dot_data_idx = 127, 16 tiles 
-        //
-        // 12 / 7 = 1     -> x_pos = 1*8
-        // 12 / 128 = 0   -> y_tile_row = 0*8
-        // (12 % 8) = 4 -> y_pos = y_row + 4
+                                        // ---0---  ---8---       --------   --------
+                                        // ---1---  ---9---       --------   --------
+                                        // ---2---  --10---       --------   --------
+                                        // ---3---  --11---       --------   --------
+                                        // ---4---  -+12---       --------   --------
+                                        // ---5---  --13---       --------   --------
+                                        // ---6---  --14---       --------   --------
+                                        // ---7---  --15---   ~   --------   ---127--
+                                        //             ^-- dot_data_idx = 12      ^---- dot_data_idx = 127, 16 tiles 
+                                        //
+                                        // 12 / 7 = 1     -> x_pos = 1*8
+                                        // 12 / 128 = 0   -> y_tile_row = 0*8
+                                        // (12 % 8) = 4 -> y_pos = y_row + 4
 
         dot_data_byte_idx = dot_data_byte_idx - VIDEO_RAM_BASE;
         //dot_data_idx = (dot_data_byte_idx >> 1) , because two bytes represent one row
@@ -195,11 +198,15 @@ public:
         //render one row of a tile
         for (int x = x_pos; x < (x_pos + 8); x++)
         {
-            color_code = 0;
-            color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
-            color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
-            bgi_color = paletteCodeToColor(color_code, BG_PALETTE_DATA);
-            putpixel(x, y_pos, bgi_color);
+            for(int page = 0; page < PAGE_NUM; page++)
+            {
+                setactivepage(page);
+                color_code = 0;
+                color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
+                color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
+                bgi_color = paletteCodeToColor(color_code, BG_PALETTE_DATA);
+                putpixel(x, y_pos, bgi_color);
+            }
         }
     }
 };
@@ -231,44 +238,44 @@ public:
         else if (access_addr == 0xFF00)
         {
             if (((*(this->raw_byte_ptr)) & JOY_PAD_RESET) == JOY_PAD_RESET)
-            //if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
+                //if ((this->value & JOY_PAD_RESET) == JOY_PAD_RESET)
             {
                 //this->value = 0xFF;
                 *(this->raw_byte_ptr) = 0xFF;
             }
             else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_DIRECT)
-            //else if (this->value & JOY_PAD_SEL_DIRECT)
+                //else if (this->value & JOY_PAD_SEL_DIRECT)
             {
                 if (GetKeyState(VK_RIGHT) < 0)
                 {
                     //this->value &= (~BIT(0));
                     (*(this->raw_byte_ptr)) &= (~BIT(0));
                 }
-                if (GetKeyState(VK_LEFT) < 0) 
+                if (GetKeyState(VK_LEFT) < 0)
                 {
                     //this->value &= (~BIT(1));
                     (*(this->raw_byte_ptr)) &= (~BIT(1));
                 }
-                if (GetKeyState(VK_UP) < 0) 
+                if (GetKeyState(VK_UP) < 0)
                 {
                     //this->value &= (~BIT(2));
                     (*(this->raw_byte_ptr)) &= (~BIT(2));
                 }
-                if (GetKeyState(VK_DOWN) < 0) 
+                if (GetKeyState(VK_DOWN) < 0)
                 {
                     //this->value &= (~BIT(3));
                     (*(this->raw_byte_ptr)) &= (~BIT(3));
                 }
             }
             else if ((*(this->raw_byte_ptr)) & JOY_PAD_SEL_BUTTON)
-            //else if (this->value & JOY_PAD_SEL_BUTTON)
+                //else if (this->value & JOY_PAD_SEL_BUTTON)
             {
                 if (GetKeyState('A') < 0)
                 {
                     //this->value &= (~BIT(0));
                     (*(this->raw_byte_ptr)) &= (~BIT(0));
                 }
-                if (GetKeyState('S') < 0) 
+                if (GetKeyState('S') < 0)
                 {
                     //this->value &= (~BIT(1));
                     (*(this->raw_byte_ptr)) &= (~BIT(1));
@@ -278,7 +285,7 @@ public:
                     //this->value &= (~BIT(2));
                     (*(this->raw_byte_ptr)) &= (~BIT(2));
                 }
-                if (GetKeyState(VK_RETURN) < 0) 
+                if (GetKeyState(VK_RETURN) < 0)
                 {
                     //this->value &= (~BIT(3));
                     (*(this->raw_byte_ptr)) &= (~BIT(3));
@@ -289,7 +296,7 @@ public:
                 //printf("unknown joy sel %04X\n", this->value);
                 //while (_hang);
             }
-            
+
         }
         //return this->value;
         return (*(this->raw_byte_ptr));
@@ -345,7 +352,7 @@ public:
         //access_addr = 0;
         memset((void*)raw_byte_data, 0x00, sizeof(U8) * MEMORY_SIZE);
         //point to each raw byte
-        for (int i = 0; i < MEMORY_SIZE; i++) 
+        for (int i = 0; i < MEMORY_SIZE; i++)
         {
             data[i].raw_byte_ptr = &raw_byte_data[i];
         }
@@ -364,14 +371,14 @@ typedef struct oam_entry_struct
     U8 pos_y;
     U8 pos_x;
     U8 tile_no; //charactor code
-    U8 rsv             : 4;
-    U8 palette         : 1;
-    U8 flip_y_flip_x   : 2;
-    U8 priority        : 1; //0 : priority to sprite
+    U8 rsv : 4;
+    U8 palette : 1;
+    U8 flip_y_flip_x : 2;
+    U8 priority : 1; //0 : priority to sprite
 }OAM_ENTRY;
 
 
-typedef struct debug_log 
+typedef struct debug_log
 {
     U16 pc;
     U16 sp;
@@ -414,25 +421,27 @@ public:
     unsigned int     cpu_cycles;
     U8               tile_data_built;
 
-	
+
     int log_idx;
 
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
     MBC1      mbc1;
     U16       pc;
-	U16       debug_pc;
+    U16       debug_pc;
     std::map<U8, U8>  ly_scx_map;
-    U8  ly_map[3];
-    U8  scx_map[3];
-    U8  fixed_ly;
-    enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL};
+    U8   ly_map[3];
+    U8   scx_map[3];
+    U8   fixed_ly;
+    U8   page;  //two page 0 and 1
+    enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL };
     DMGZ80CPU()
     {
         U8DATA::pc = &this->pc;
         U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
         U8DATA::cpu = this;
         TILE_DOT_DATA_PAINTER::cpu = this;
+        page = 0;
 
         ime = TRUE;
 
@@ -445,12 +454,12 @@ public:
         //hl.all = 0x0000;
 
         flip_tile_buf_ptr = malloc(imagesize(0, 0, TILE_SIZE - 1, TILE_SIZE - 1));
-        tile_buf_ptr      = malloc(imagesize(0, 0, TILE_SIZE - 1, TILE_SIZE - 1));
-        viewport_buf_ptr  = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
+        tile_buf_ptr = malloc(imagesize(0, 0, TILE_SIZE - 1, TILE_SIZE - 1));
+        viewport_buf_ptr = malloc(imagesize(0, 0, LCD_WIDTH, LCD_HEIGHT));
         halt_state = FALSE;
         cpu_cycles = 0;
         refresh_lcd = FALSE;
-        
+
         log_idx = 0;
 
         /*
@@ -461,7 +470,7 @@ public:
         de.all = 0x0000;
         hl.all = 0x0000;
         ime = TRUE;*/
-        
+
 
         //main program start
         //tetris rom initial state
@@ -471,7 +480,7 @@ public:
         bc.all = 0x0013;
         de.all = 0x00D8;
         hl.all = 0x014D;
-        
+
 
         //quick debug from
         //sp = 0xCFFF;
@@ -528,7 +537,7 @@ public:
         fin.seekg(0, fin.beg);
         //bulk copy to Z80 ram , if cartridge_rom_size was larger than 32k ,copy only 32k to Z80 RAM
         fin.read((char *)(memory[0].raw_byte_ptr + CARTRIDGE_ROM_BASE), (cartridge_rom_size > ROM_IN_Z80_SIZE) ? ROM_IN_Z80_SIZE : cartridge_rom_size);
-        
+
 
         //mario rom         |-bank0-|-bank1-|-bank2-|-bank3-| 64k
         //z80 ram           |-bank0-|-bank1-|---------------| 64k
@@ -548,9 +557,9 @@ public:
 
         for (int i = 0; i < rom_size; i++)
         {
-            //assign one to one
-            fin.read((char *)(&one_byte), sizeof(one_byte));
-            memory[i] = one_byte;
+        //assign one to one
+        fin.read((char *)(&one_byte), sizeof(one_byte));
+        memory[i] = one_byte;
         }
 
         */
@@ -659,40 +668,40 @@ public:
     /*
     inline int paletteCodeToColor(U8 palette_color_code)
     {
-        U8  color_code;
-        int color;
-        U8  bg_palette_color = memory[BG_PALETTE_DATA];
-        U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
+    U8  color_code;
+    int color;
+    U8  bg_palette_color = memory[BG_PALETTE_DATA];
+    U8  palette_code_to_color_code[4] = { (bg_palette_color >> 0) & 0x3,(bg_palette_color >> 2) & 0x3,(bg_palette_color >> 4) & 0x3,(bg_palette_color >> 6) & 0x3 };
 
-        //palette color code -> color code
-        color_code = palette_code_to_color_code[palette_color_code];
+    //palette color code -> color code
+    color_code = palette_code_to_color_code[palette_color_code];
 
-        //color code -> color(winbgi)
+    //color code -> color(winbgi)
 
 
-        switch (color_code)
-        {
-        case 0x0:
-            color = RED;//COLOR(0, 0, 0);
-            break;
+    switch (color_code)
+    {
+    case 0x0:
+    color = RED;//COLOR(0, 0, 0);
+    break;
 
-        case 0x1:
-            color = COLOR(85, 85, 85);
-            break;
+    case 0x1:
+    color = COLOR(85, 85, 85);
+    break;
 
-        case 0x2:
-            color = COLOR(170, 170, 170);
-            break;
+    case 0x2:
+    color = COLOR(170, 170, 170);
+    break;
 
-        case 0x3:
-            color = COLOR(255, 255, 255);
-            break;
+    case 0x3:
+    color = COLOR(255, 255, 255);
+    break;
 
-        default:
-            //printf("unknown color code\n");
-            break;
-        }
-        return color;
+    default:
+    //printf("unknown color code\n");
+    break;
+    }
+    return color;
     }*/
     /*
     //         x_pos
@@ -706,59 +715,59 @@ public:
     //build each 8x8 tile
     void buildTile(int y_pos, int x_pos, U16 dot_data_ofst)
     {
-        int data_idx = 0;
-        U8 upper_dot_byte, lower_dot_byte;
-        int color;
-        U8 color_code = 0;
-        for (int i = 0; i < 16; i += 2)
-        {
-            upper_dot_byte = memory[dot_data_ofst + i];
-            lower_dot_byte = memory[dot_data_ofst + i + 1];
-            //process per row
-            for (int x = x_pos; x < (x_pos + 8); x++)
-            {
-                color_code = 0;
-                color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
-                color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
-                //color = COLOR(color_code * 85, color_code * 85, color_code * 85);
-                color = paletteCodeToColor(color_code);
-                putpixel(x, y_pos, color);
-                //putpixel(x, y_pos, COLOR(255, 255, 255));
-            }
-            y_pos++;
-        }
+    int data_idx = 0;
+    U8 upper_dot_byte, lower_dot_byte;
+    int color;
+    U8 color_code = 0;
+    for (int i = 0; i < 16; i += 2)
+    {
+    upper_dot_byte = memory[dot_data_ofst + i];
+    lower_dot_byte = memory[dot_data_ofst + i + 1];
+    //process per row
+    for (int x = x_pos; x < (x_pos + 8); x++)
+    {
+    color_code = 0;
+    color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
+    color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
+    //color = COLOR(color_code * 85, color_code * 85, color_code * 85);
+    color = paletteCodeToColor(color_code);
+    putpixel(x, y_pos, color);
+    //putpixel(x, y_pos, COLOR(255, 255, 255));
+    }
+    y_pos++;
+    }
     }*/
     //build all tiles
     /*void buildAllTileData()
     {
-        int x_pos = 0, y_pos = 0;
-        int video_ram_offset = 0;
-        int bg_char_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
-        U8 _break = false;
-        U8 sixteen_byte[16];
-        U16 dot_data_ofst;
-        for (y_pos = BG_TILE_BGI_BUFFER_Y + 0; y_pos < (256 + BG_TILE_BGI_BUFFER_Y); y_pos += 8)
-        {
-            for (x_pos = BG_TILE_BGI_BUFFER_X + 0; x_pos < (BG_TILE_BGI_BUFFER_X + 256); x_pos += 8)
-            {
-                //rectangle(x_pos, y_pos, x_pos + 8, y_pos + 8);
-                //for (int i = 0; i < 16; i++) 
-                //{
-                //    sixteen_byte[i] = memory[VIDEO_RAM_BASE + video_ram_offset + i];
-                //}
-                buildTile(y_pos, x_pos, bg_char_data_ofst + video_ram_offset);
+    int x_pos = 0, y_pos = 0;
+    int video_ram_offset = 0;
+    int bg_char_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
+    U8 _break = false;
+    U8 sixteen_byte[16];
+    U16 dot_data_ofst;
+    for (y_pos = BG_TILE_BGI_BUFFER_Y + 0; y_pos < (256 + BG_TILE_BGI_BUFFER_Y); y_pos += 8)
+    {
+    for (x_pos = BG_TILE_BGI_BUFFER_X + 0; x_pos < (BG_TILE_BGI_BUFFER_X + 256); x_pos += 8)
+    {
+    //rectangle(x_pos, y_pos, x_pos + 8, y_pos + 8);
+    //for (int i = 0; i < 16; i++)
+    //{
+    //    sixteen_byte[i] = memory[VIDEO_RAM_BASE + video_ram_offset + i];
+    //}
+    buildTile(y_pos, x_pos, bg_char_data_ofst + video_ram_offset);
 
 
-                video_ram_offset += 16;
-                if (video_ram_offset >= BG_CHAR_DATA_SIZE)
-                {
-                    _break = true;
-                }
-            }
-            if (_break)
-                break;
-        }
-        tile_data_built = TRUE;
+    video_ram_offset += 16;
+    if (video_ram_offset >= BG_CHAR_DATA_SIZE)
+    {
+    _break = true;
+    }
+    }
+    if (_break)
+    break;
+    }
+    tile_data_built = TRUE;
     }*/
     //render 160 * 144 takes about 40ms 
     //takes about 79800 cpu cycles
@@ -779,34 +788,34 @@ public:
                 //if bg tile data locates at 0x8800 ~ 0x97FF
                 //tile_no can be 0x80 ~ 0xFF , 0x00 ~ 0x7F
                 //0x00 ~ 0x7F actually means 0x100 ~ 0x17F, so shift tile_no by 0x100
-                if (bg_tile_data_ofst == 0x8800) 
+                if (bg_tile_data_ofst == 0x8800)
                 {
                     if (tile_no < 0x80)
                     {
                         tile_no = tile_no + 0x100;
                     }
-                }                
+                }
                 getTile(tile_no, tile_buf_ptr);
                 putimage(BG_X + x, BG_Y + y, tile_buf_ptr, COPY_PUT);
             }
         }
     }/*
-    void debugPPU()
-    {
-        rectangle(0, 0, 257, 257);
-        buildAllTileData();
-        buildBackground();
-    }*/
+     void debugPPU()
+     {
+     rectangle(0, 0, 257, 257);
+     buildAllTileData();
+     buildBackground();
+     }*/
 
-    //LCD timing
-    //Mode2 OAM  O_____O_____O_____O_____O_____O___________________O____
-    //Mode3 DMA  _DD____DD____DD____DD____DD____DD__________________D___
-    //Mode0 H    ___HHH___HHH___HHH___HHH___HHH___HHH________________HHH
-    //Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
+     //LCD timing
+     //Mode2 OAM  O_____O_____O_____O_____O_____O___________________O____
+     //Mode3 DMA  _DD____DD____DD____DD____DD____DD__________________D___
+     //Mode0 H    ___HHH___HHH___HHH___HHH___HHH___HHH________________HHH
+     //Mode1 V    ____________________________________VVVVVVVVVVVVVV_____
     void update_lcd_y_coord()
     {
         //this mask controls frame rate
-        if ((cpu_cycles & 0x3F) == 0)
+        if ((cpu_cycles & 0x7F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
             memory[LY] = (U8)(memory[LY] + 1);
@@ -822,15 +831,15 @@ public:
         U16 input_clk_sel = memory[TAC] & 0x7F;
         input_clk_sel = (input_clk_sel == 0) ? 4 : input_clk_sel; // 0 -> 4
 
-        // 0b00 -> freq / 2^10
-        // 0b01 -> freq / 2^4
-        // 0b10 -> freq / 2^6
-        // 0b11 -> freq / 2^8
+                                                                  // 0b00 -> freq / 2^10
+                                                                  // 0b01 -> freq / 2^4
+                                                                  // 0b10 -> freq / 2^6
+                                                                  // 0b11 -> freq / 2^8
         U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
 
         if ((cpu_cycles & timer_mod_mask) == 0)
         {
-            if (memory[TAC] & TAC_START) 
+            if (memory[TAC] & TAC_START)
             {
                 memory[TIMA] = memory[TIMA] + 1;
             }
@@ -860,7 +869,7 @@ public:
             //trigger refresh lcd, only one time
             if ((cpu_cycles & 0xFF) == 0)
                 this->refresh_lcd = TRUE;
-            
+
             //check if int master enable and vbank int is enabled
             if (ime && (memory[INT_SWITCH] & INT_FLAG_VERT_BLANKING))
             {
@@ -881,7 +890,7 @@ public:
         //LYC == LY
         if (lcd_int_mode & LCD_INT_LYC_LY)
         {
-            if(memory[LY] == memory[LYC])
+            if (memory[LY] == memory[LYC])
             {
                 //because only when every 0x7F cpu cycles, can memory[LY] increment by 1
                 //in order to preventing from triggering interrupt multiple times
@@ -956,7 +965,7 @@ public:
         }
         else if (fm == FLIP_HORIZONTAL)
         {
-            for (U8 y = 0; y < 8; y++) 
+            for (U8 y = 0; y < 8; y++)
             {
                 for (U8 x = 0; x < 8; x++)
                 {
@@ -990,11 +999,11 @@ public:
 
 
     }
-    inline void updateOAM() 
-    {        
+    inline void updateOAM()
+    {
         OAM_ENTRY *oam_entry_ptr;
         U8 oam_entry_4_byte[4];
-        for (U8 i = 0; i < OAM_COUNT; i++) 
+        for (U8 i = 0; i < OAM_COUNT; i++)
         {
             //because element in memory is raw data
             //in order to take advantage of pointer
@@ -1008,11 +1017,13 @@ public:
             getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
             putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
             rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
-            
+
         }
     }
     void refreshLCD()
     {
+        setvisualpage(page);
+
         //GetSystemTime(&end_time);
         //printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
         //printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
@@ -1041,9 +1052,9 @@ public:
 
         //
         std::pair<U8, U8> last_ly_scx = std::make_pair<U8, U8>(0, 0);
-        this->ly_scx_map[LCD_WIDTH] = 0;    
-        
-        if(viewport_x_end < BG_WIDTH)
+        this->ly_scx_map[LCD_WIDTH] = 0;
+
+        if (viewport_x_end < BG_WIDTH)
         {
             getimage(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end, viewport_buf_ptr);
         }
@@ -1058,19 +1069,19 @@ public:
         //wrap part
         if (viewport_x_end > BG_WIDTH)
         {
-            wrap_x_width   = viewport_x_end - BG_WIDTH;
+            wrap_x_width = viewport_x_end - BG_WIDTH;
             viewport_x_end = BG_WIDTH;
 
             getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
             putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
-            rectangle(BG_X , BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
+            rectangle(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
         }
-        
-        
+
+
         //getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
-        getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
-        putimage(VIEWPORT_X , VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+        getimage(BG_X, BG_Y, BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
+        putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
 
         if (viewport_x_end < BG_WIDTH)
@@ -1081,14 +1092,15 @@ public:
         {
             rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end);
         }
-
-
         //render sprite ,OAM
         updateOAM();
-        
+
+
+        setactivepage(page);
+        page = !page;
     }
     //
-    bool isFocused() 
+    bool isFocused()
     {
         char wnd_title[256];
         char correct_window_title[] = "gameboy_emulator";
@@ -1097,13 +1109,13 @@ public:
         GetWindowText(hwnd, wnd_title, sizeof(wnd_title));
 
 
-        if (strncmp(correct_window_title, wnd_title, 10) == 0) 
+        if (strncmp(correct_window_title, wnd_title, 10) == 0)
         {
-        //printf("*%s\n", wnd_title);
-        //printf("-%s\n", correct_window_title);
+            //printf("*%s\n", wnd_title);
+            //printf("-%s\n", correct_window_title);
             return TRUE;
         }
-        else 
+        else
         {
             return FALSE;
         }
@@ -1123,7 +1135,7 @@ public:
 
 
 
-        U8    _debug = true;        
+        U8    _debug = true;
         U8 showpc = 0;
         U16 debug_pc = 0xc00a;
 
@@ -1144,7 +1156,7 @@ public:
             //{
             //    continue;
             //}
-            cpu_cycles ++;
+            cpu_cycles++;
             update_lcd_y_coord();
             update_timer();
 
@@ -1173,7 +1185,7 @@ public:
                 ly = memory[LY];
 
 
-                if (log_idx == 8192) 
+                if (log_idx == 8192)
                 {
                     log_idx = 0;
                 }
@@ -1190,12 +1202,12 @@ public:
                 current_log = log[log_idx];
 
                 log_idx++;
-                if(showpc)
+                if (showpc)
 
-                if (this->pc == debug_pc) 
-                {
-                    printREG();
-                }
+                    if (this->pc == debug_pc)
+                    {
+                        printREG();
+                    }
 
                 switch (opcode)
                 {
@@ -1753,7 +1765,7 @@ public:
                     prev_value = af.a;
                     af.a = af.a + (*idxToRegr_HL(opcode & 0x7)) + af.f_c;
                     af.f_c = (prev_value >= af.a) ? 1 : 0;
-                    af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;            
+                    af.f_h = ((prev_value & 0xF) >= (af.a & 0xF)) ? 1 : 0;
                     af.f_n = 0;
                     af.f_z = (af.a == 0) ? 1 : 0;
                     */
@@ -2366,7 +2378,7 @@ public:
                     af.f_z = (af.a == 0) ? 1 : 0;
                     */
 
-                    
+
 
                     //two stage
                     //reason : in case a=0 c=1 xx=F
@@ -2394,7 +2406,7 @@ public:
                     //second : like narmal ADD
                     prev_a = af.a;
                     af.a = af.a - xx;
-                    if(af.f_c == 0)
+                    if (af.f_c == 0)
                         af.f_c = (prev_a < af.a) ? 1 : 0;
 
                     if (af.f_h == 0)
@@ -2422,7 +2434,7 @@ public:
                     pc += 2;
                     /*
                     prev_value = af.a;
-                    af.a = af.a - (*idxToRegr_HL(opcode & 0x7)) - af.f_c ;                    
+                    af.a = af.a - (*idxToRegr_HL(opcode & 0x7)) - af.f_c ;
                     af.f_h = ((af.a & 0xF) >= (prev_value & 0xF)) ? 1 : 0;
                     af.f_c = (af.a >= prev_value) ? 1 : 0;
                     af.f_n = 1;
@@ -2493,7 +2505,7 @@ public:
 
                     //XOR
                 case 0xEE:
-                    pc += 2;                    
+                    pc += 2;
                     af.a = xx ^ af.a;
                     af.f_z = (af.a == 0) ? 1 : 0;
                     af.f_n = 0;
@@ -2588,6 +2600,7 @@ U8DATA &U8DATA::operator=(U8 val)
         //for MBC 
         if (this->access_addr == MBC1_REGISTER_1)
         {
+            ASSERT(val <= 3);
             this->cpu->memory.mbc1.register1 = val;
             //bank switching
             void *bank_tgt_addr = (void *)&this->cpu->memory.raw_byte_data[ROM_BANK1_START];
@@ -2633,7 +2646,7 @@ U8DATA &U8DATA::operator=(U8 val)
 
 
 
-int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code ,U16 which_palette)
+int TILE_DOT_DATA_PAINTER::paletteCodeToColor(U8 palette_color_code, U16 which_palette)
 {
     U8  color_code;
     int color;
