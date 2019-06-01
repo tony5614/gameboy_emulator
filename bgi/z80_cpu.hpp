@@ -105,7 +105,11 @@ typedef unsigned short U16;
 #define ISR_SERIEAL_TRANS_CPL  0x58
 #define ISR_P10_P10_INPUT      0x60
 
-#define ASSERT(X)              while (!(X)) {}
+#define ASSERT(ERR_MSG,X)      if(!(X))\
+							   {\
+							       printf("%s\n",ERR_MSG);\
+							       while (1) {}\
+                               }
 
 
 
@@ -381,12 +385,12 @@ typedef struct oam_entry_struct
 typedef struct debug_log
 {
     U16 pc;
+    U8 opcode;
     U16 sp;
     AF af;
     BC bc;
     DE de;
     HL hl;
-    U8 opcode;
     U8 xx;
     U16 aabb;
 }DEBUGLOG;
@@ -426,7 +430,6 @@ public:
 
     TILE_DOT_DATA_PAINTER tile_dot_data_painter;
     DEBUG_MEM memory;
-    MBC1      mbc1;
     U16       pc;
     U16       debug_pc;
     std::map<U8, U8>  ly_scx_map;
@@ -437,10 +440,10 @@ public:
     enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL };
     DMGZ80CPU()
     {
-        U8DATA::pc = &this->pc;
         U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
-        U8DATA::cpu = this;
         TILE_DOT_DATA_PAINTER::cpu = this;
+        U8DATA::pc       = &this->pc;
+        U8DATA::cpu      = this;
         page = 0;
 
         ime = TRUE;
@@ -521,6 +524,16 @@ public:
         }
         //printf("\n");
     }
+	BOOL detectMouseClick()
+	{
+		BOOL clicked = FALSE;
+		if (ismouseclick(WM_LBUTTONDOWN))
+		{
+			clearmouseclick(WM_LBUTTONDOWN);
+			clicked = TRUE;
+		}
+		return clicked;
+	}
     void readROM(std::string filename)
     {
         std::ifstream fin;
@@ -835,7 +848,8 @@ public:
                                                                   // 0b01 -> freq / 2^4
                                                                   // 0b10 -> freq / 2^6
                                                                   // 0b11 -> freq / 2^8
-        U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
+		//U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
+		U16 timer_mod_mask = (0x1 << ((input_clk_sel + 2) * 2)) - 1;
 
         if ((cpu_cycles & timer_mod_mask) == 0)
         {
@@ -929,18 +943,21 @@ public:
             memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_TIMER);
 
             //When TIMA overflows, the TMA data is loaded into TIMA
-            memory[TIMA] = memory[TMA];
+            //memory[TIMA] = memory[TMA];
+			//memory[TMA] was somehow loaded with 0xFF, It causes emulator to be trapped in timer interrupt, and result in stack overflow, and finally overwrite data in VRAM
+			//workaround
+			memory[TIMA] = 0;
 
             if (ime)
             {
                 ime = FALSE;
                 memory[--sp] = pc >> 8;
                 memory[--sp] = pc & 0xFF;
+				ASSERT("sp >= EXTERNAL_RAM_BASE", sp >= EXTERNAL_RAM_BASE);
                 pc = ISR_TIMER;
                 //clear flag if the interrupt is served by isr
                 memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_TIMER);
-
-                //printf("goto isr = %X\n", pc);
+                printf("timer interupt goto isr = %X\n", pc);
             }
         }
     }
@@ -1135,8 +1152,8 @@ public:
 
 
 
-        U8    _debug = true;
-        U8 showpc = 0;
+        U8  click_debug = FALSE;
+        U8  showpc = 0;
         U16 debug_pc = 0xc00a;
 
         U16 no_carry_sum;
@@ -1156,6 +1173,13 @@ public:
             //{
             //    continue;
             //}
+			
+			if (detectMouseClick())
+			{
+				printf("clicked %d\n", cpu_cycles);
+				click_debug = !click_debug;
+
+			}
             cpu_cycles++;
             update_lcd_y_coord();
             update_timer();
@@ -1169,7 +1193,7 @@ public:
             }
 
             //
-            if (halt_state == TRUE)
+            if ((halt_state == TRUE) || (click_debug == TRUE))
             {
                 //do nothing
                 //printf(".");
@@ -1198,16 +1222,19 @@ public:
                 log[log_idx].opcode = opcode;
                 log[log_idx].xx = xx;
                 log[log_idx].aabb = aabb;
-
                 current_log = log[log_idx];
-
                 log_idx++;
-                if (showpc)
 
-                    if (this->pc == debug_pc)
-                    {
-                        printREG();
-                    }
+                if (showpc)
+				{
+					printREG();
+				}
+                if (this->pc == debug_pc)
+                {
+                    printREG();
+                }
+
+				ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
 
                 switch (opcode)
                 {
@@ -2299,10 +2326,11 @@ public:
                     //cpu_cycles += 4;
                     //printf("RETI \r\n");
                     pc = (memory[sp + 1] << 8) | memory[sp];
+					ASSERT("RETI pc = 0 not makes sense", pc != 0);
                     sp += 2;
                     //auto enable ime
                     this->ime = 1;
-                    //clear match flag
+                    //clear match flag, copy bgb behavior
                     memory[LCD_STAT] = memory[LCD_STAT] & (~LCD_MATCH_FLAG);
                     break;
 
@@ -2600,7 +2628,7 @@ U8DATA &U8DATA::operator=(U8 val)
         //for MBC 
         if (this->access_addr == MBC1_REGISTER_1)
         {
-            ASSERT(val <= 3);
+            ASSERT("mbc1 can only be assigned <= 3",val <= 3);
             this->cpu->memory.mbc1.register1 = val;
             //bank switching
             void *bank_tgt_addr = (void *)&this->cpu->memory.raw_byte_data[ROM_BANK1_START];

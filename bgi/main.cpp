@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
 {	
 	
 	
-	initwindow(560, 256, "gameboy_emulator", 10 ,20);
+	initwindow(560, 256, "gameboy_emulator", 500 ,400);
 	DMGZ80CPU cpu;
 	//setbkcolor(WHITE);
 	cleardevice();
