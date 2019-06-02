@@ -30,7 +30,7 @@ typedef unsigned short U16;
 #define DIV                    (0xFF04)    //DIV ,frequently used as random generator
 #define TIMA                   (0xFF05)    //timer counter
 #define TMA                    (0xFF06)    //timer modulo
-#define TAC                    (0xFF07) // timer control
+#define TAC                    (0xFF07)   // timer control
 #define     TAC_START                  BIT(2) //timer start
 #define LCD_CTRL_REG           (0xFF40) //LCDC
 #define     BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
@@ -233,7 +233,9 @@ public:
     }
     operator U8()
     {
-        ////printf("cast operator @ %04X\n", *access_addr);
+		//if (this->access_addr == TIMA)
+		//	printf("cast operator @ %04X\n", this->access_addr);
+
         if (access_addr == 0xFF44)
         {
             //while (_hang);
@@ -305,12 +307,21 @@ public:
         //return this->value;
         return (*(this->raw_byte_ptr));
     }
+	
     U8* operator &()
     {
-        //printf("get address operator @ %04X\n" ,*access_addr);
+		if(this->access_addr == TIMA)
+			printf("get address operator @ %04X\n" ,this->access_addr);
         //return &this->value;
         return &(*(this->raw_byte_ptr));
     }
+	
+	U8DATA &operator=(U8DATA val) 
+	{
+		//only copy data
+		*this->raw_byte_ptr = *val.raw_byte_ptr;
+		return (*this);
+	}
     U8DATA &operator=(U8 val);
 };
 
@@ -385,6 +396,7 @@ typedef struct oam_entry_struct
 typedef struct debug_log
 {
     U16 pc;
+	U8  tma;
     U8 opcode;
     U16 sp;
     AF af;
@@ -943,10 +955,14 @@ public:
             memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_TIMER);
 
             //When TIMA overflows, the TMA data is loaded into TIMA
-            //memory[TIMA] = memory[TMA];
+			ASSERT("memory[TMA] != 0xFF", memory[TMA] != 0xFF);				
+			
+
+            memory[TIMA] = memory[TMA];
+
 			//memory[TMA] was somehow loaded with 0xFF, It causes emulator to be trapped in timer interrupt, and result in stack overflow, and finally overwrite data in VRAM
 			//workaround
-			memory[TIMA] = 0;
+			//memory[TIMA] = 0;
 
             if (ime)
             {
@@ -1159,6 +1175,7 @@ public:
         U16 no_carry_sum;
         U16 carry_sum;
 
+		U8 TMA_debug_value = 0x00;
         //each loop takes about 0.0005 ms
         while (TRUE)
         {
@@ -1174,12 +1191,12 @@ public:
             //    continue;
             //}
 			
-			if (detectMouseClick())
+			/*if (detectMouseClick())
 			{
 				printf("clicked %d\n", cpu_cycles);
 				click_debug = !click_debug;
 
-			}
+			}*/
             cpu_cycles++;
             update_lcd_y_coord();
             update_timer();
@@ -1193,7 +1210,7 @@ public:
             }
 
             //
-            if ((halt_state == TRUE) || (click_debug == TRUE))
+            if ((halt_state == TRUE) /*|| (click_debug == TRUE)*/)
             {
                 //do nothing
                 //printf(".");
@@ -1222,10 +1239,11 @@ public:
                 log[log_idx].opcode = opcode;
                 log[log_idx].xx = xx;
                 log[log_idx].aabb = aabb;
+                log[log_idx].tma = this->memory[TMA];
                 current_log = log[log_idx];
                 log_idx++;
 
-                if (showpc)
+                if (this->memory.raw_byte_data[0xFF06] != TMA_debug_value)
 				{
 					printREG();
 				}
@@ -1235,6 +1253,7 @@ public:
                 }
 
 				ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
+
 
                 switch (opcode)
                 {
@@ -2663,6 +2682,12 @@ U8DATA &U8DATA::operator=(U8 val)
         (*(this->raw_byte_ptr)) = val;
         return (*this);
     }
+	else if (this->access_addr == TMA) 
+	{
+		printf("write TMA = %02X\n", val);
+		(*(this->raw_byte_ptr)) = val;
+		return (*this);
+	}
     //normal assignment
     else
     {
