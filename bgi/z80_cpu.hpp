@@ -105,13 +105,16 @@ typedef unsigned short U16;
 #define ISR_SERIEAL_TRANS_CPL  0x58
 #define ISR_P10_P10_INPUT      0x60
 
+#define ENABLE_DOUBLE_GRAPHIC_BUFFER (1)
+#define ENABLE_DEBUG_RECTANGLE       (0)
+
 #define ASSERT(ERR_MSG,X)      if(!(X))\
-							   {\
-							       printf("%s\n",ERR_MSG);\
-							       while (1) {}\
+                               {\
+                                   printf("%s\n",ERR_MSG);\
+                                   while (1) {}\
                                }
 
-
+    
 
 union AF
 {
@@ -202,15 +205,20 @@ public:
         //render one row of a tile
         for (int x = x_pos; x < (x_pos + 8); x++)
         {
+#if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
             for(int page = 0; page < PAGE_NUM; page++)
             {
                 setactivepage(page);
+#endif
                 color_code = 0;
                 color_code += (upper_dot_byte & BIT(7 - (x & 0x7))) ? 2 : 0;
                 color_code += (lower_dot_byte & BIT(7 - (x & 0x7))) ? 1 : 0;
                 bgi_color = paletteCodeToColor(color_code, BG_PALETTE_DATA);
                 putpixel(x, y_pos, bgi_color);
+
+#if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
             }
+#endif
         }
     }
 };
@@ -233,8 +241,8 @@ public:
     }
     operator U8()
     {
-		//if (this->access_addr == TIMA)
-		//	printf("cast operator @ %04X\n", this->access_addr);
+        //if (this->access_addr == TIMA)
+        //    printf("cast operator @ %04X\n", this->access_addr);
 
         if (access_addr == 0xFF44)
         {
@@ -307,21 +315,21 @@ public:
         //return this->value;
         return (*(this->raw_byte_ptr));
     }
-	
+    
     U8* operator &()
     {
-		if(this->access_addr == TIMA)
-			printf("get address operator @ %04X\n" ,this->access_addr);
+        if(this->access_addr == TIMA)
+            printf("get address operator @ %04X\n" ,this->access_addr);
         //return &this->value;
         return &(*(this->raw_byte_ptr));
     }
-	
-	U8DATA &operator=(U8DATA val) 
-	{
-		//only copy data
-		*this->raw_byte_ptr = *val.raw_byte_ptr;
-		return (*this);
-	}
+    
+    U8DATA &operator=(U8DATA val) 
+    {
+        //only copy data
+        *this->raw_byte_ptr = *val.raw_byte_ptr;
+        return (*this);
+    }
     U8DATA &operator=(U8 val);
 };
 
@@ -396,7 +404,7 @@ typedef struct oam_entry_struct
 typedef struct debug_log
 {
     U16 pc;
-	U8  tma;
+    U8  tma;
     U8 opcode;
     U16 sp;
     AF af;
@@ -536,16 +544,16 @@ public:
         }
         //printf("\n");
     }
-	BOOL detectMouseClick()
-	{
-		BOOL clicked = FALSE;
-		if (ismouseclick(WM_LBUTTONDOWN))
-		{
-			clearmouseclick(WM_LBUTTONDOWN);
-			clicked = TRUE;
-		}
-		return clicked;
-	}
+    BOOL detectMouseClick()
+    {
+        BOOL clicked = FALSE;
+        if (ismouseclick(WM_LBUTTONDOWN))
+        {
+            clearmouseclick(WM_LBUTTONDOWN);
+            clicked = TRUE;
+        }
+        return clicked;
+    }
     void readROM(std::string filename)
     {
         std::ifstream fin;
@@ -860,8 +868,8 @@ public:
                                                                   // 0b01 -> freq / 2^4
                                                                   // 0b10 -> freq / 2^6
                                                                   // 0b11 -> freq / 2^8
-		//U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
-		U16 timer_mod_mask = (0x1 << ((input_clk_sel + 2) * 2)) - 1;
+        //U16 timer_mod_mask = (0x1 << ((input_clk_sel + 1) * 2)) - 1;
+        U16 timer_mod_mask = (0x1 << ((input_clk_sel + 2) * 2)) - 1;
 
         if ((cpu_cycles & timer_mod_mask) == 0)
         {
@@ -955,21 +963,21 @@ public:
             memory[INT_FLAGS] = (memory[INT_FLAGS] | INT_FLAG_TIMER);
 
             //When TIMA overflows, the TMA data is loaded into TIMA
-			ASSERT("memory[TMA] != 0xFF", memory[TMA] != 0xFF);				
-			
+            ASSERT("memory[TMA] != 0xFF", memory[TMA] != 0xFF);                
+            
 
             memory[TIMA] = memory[TMA];
 
-			//memory[TMA] was somehow loaded with 0xFF, It causes emulator to be trapped in timer interrupt, and result in stack overflow, and finally overwrite data in VRAM
-			//workaround
-			//memory[TIMA] = 0;
+            //memory[TMA] was somehow loaded with 0xFF, It causes emulator to be trapped in timer interrupt, and result in stack overflow, and finally overwrite data in VRAM
+            //workaround
+            //memory[TIMA] = 0;
 
             if (ime)
             {
                 ime = FALSE;
                 memory[--sp] = pc >> 8;
                 memory[--sp] = pc & 0xFF;
-				ASSERT("sp >= EXTERNAL_RAM_BASE", sp >= EXTERNAL_RAM_BASE);
+                ASSERT("sp >= EXTERNAL_RAM_BASE", sp >= EXTERNAL_RAM_BASE);
                 pc = ISR_TIMER;
                 //clear flag if the interrupt is served by isr
                 memory[INT_FLAGS] = memory[INT_FLAGS] & (~INT_FLAG_TIMER);
@@ -1047,15 +1055,22 @@ public:
             oam_entry_4_byte[3] = memory[OAM + i * sizeof(OAM_ENTRY) + 3];
             oam_entry_ptr = (OAM_ENTRY*)oam_entry_4_byte;
 
+            //invalid, because memory is no primitive U8 array, is U8DATA instead
+            //oam_entry_ptr = (OAM_ENTRY*)(&memory[OAM + i * sizeof(OAM_ENTRY) + 3]);
+
             getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
             putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
-            rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
 
+#if            (ENABLE_DEBUG_RECTANGLE == 1)
+            rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
+#endif
         }
     }
     void refreshLCD()
     {
+#if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
         setvisualpage(page);
+#endif
 
         //GetSystemTime(&end_time);
         //printf("s: %d , ms : %d\n", begin_time.wSecond, begin_time.wMilliseconds);
@@ -1107,8 +1122,9 @@ public:
 
             getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
             putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
-
+#if (ENABLE_DEBUG_RECTANGLE == 1)
             rectangle(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
+#endif
         }
 
 
@@ -1116,7 +1132,7 @@ public:
         getimage(BG_X, BG_Y, BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
-
+#if (ENABLE_DEBUG_RECTANGLE == 1)
         if (viewport_x_end < BG_WIDTH)
         {
             rectangle(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end);
@@ -1125,12 +1141,15 @@ public:
         {
             rectangle(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end);
         }
+#endif
         //render sprite ,OAM
         updateOAM();
 
 
+#if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
         setactivepage(page);
         page = !page;
+#endif
     }
     //
     bool isFocused()
@@ -1175,7 +1194,7 @@ public:
         U16 no_carry_sum;
         U16 carry_sum;
 
-		U8 TMA_debug_value = 0x00;
+        U8 TMA_debug_value = 0x00;
         //each loop takes about 0.0005 ms
         while (TRUE)
         {
@@ -1190,13 +1209,13 @@ public:
             //{
             //    continue;
             //}
-			
-			/*if (detectMouseClick())
-			{
-				printf("clicked %d\n", cpu_cycles);
-				click_debug = !click_debug;
+            
+            /*if (detectMouseClick())
+            {
+                printf("clicked %d\n", cpu_cycles);
+                click_debug = !click_debug;
 
-			}*/
+            }*/
             cpu_cycles++;
             update_lcd_y_coord();
             update_timer();
@@ -1243,16 +1262,13 @@ public:
                 current_log = log[log_idx];
                 log_idx++;
 
-                if (this->memory.raw_byte_data[0xFF06] != TMA_debug_value)
-				{
-					printREG();
-				}
+
                 if (this->pc == debug_pc)
                 {
                     printREG();
                 }
 
-				ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
+                ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
 
 
                 switch (opcode)
@@ -2345,7 +2361,7 @@ public:
                     //cpu_cycles += 4;
                     //printf("RETI \r\n");
                     pc = (memory[sp + 1] << 8) | memory[sp];
-					ASSERT("RETI pc = 0 not makes sense", pc != 0);
+                    ASSERT("RETI pc = 0 not makes sense", pc != 0);
                     sp += 2;
                     //auto enable ime
                     this->ime = 1;
@@ -2478,7 +2494,7 @@ public:
                 case 0x9F:
                     //cpu_cycles += 1;
                     //printf("%04X sub %04X cy: %04X\n", af.a, (*idxToRegr_HL(opcode & 0x7)), af.f_c);
-                    pc += 2;
+                    pc += 1;
                     /*
                     prev_value = af.a;
                     af.a = af.a - (*idxToRegr_HL(opcode & 0x7)) - af.f_c ;
@@ -2682,12 +2698,12 @@ U8DATA &U8DATA::operator=(U8 val)
         (*(this->raw_byte_ptr)) = val;
         return (*this);
     }
-	else if (this->access_addr == TMA) 
-	{
-		printf("write TMA = %02X\n", val);
-		(*(this->raw_byte_ptr)) = val;
-		return (*this);
-	}
+    else if (this->access_addr == TMA) 
+    {
+        printf("write TMA = %02X\n", val);
+        (*(this->raw_byte_ptr)) = val;
+        return (*this);
+    }
     //normal assignment
     else
     {
