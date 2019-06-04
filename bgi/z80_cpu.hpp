@@ -1010,10 +1010,10 @@ public:
             {
                 for (U8 x = 0; x < 8; x++)
                 {
-                    putpixel(FLIP_TILE_BUFFER_X + 8 - x, FLIP_TILE_BUFFER_Y + y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
+                    putpixel(FLIP_TILE_BUFFER_X + TILE_SIZE - 1 - x, FLIP_TILE_BUFFER_Y + y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
                 }
             }
-            getimage(FLIP_TILE_BUFFER_X, FLIP_TILE_BUFFER_Y, FLIP_TILE_BUFFER_X + TILE_SIZE - 1, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1, tile_ptr);
+            getimage(FLIP_TILE_BUFFER_X , FLIP_TILE_BUFFER_Y, FLIP_TILE_BUFFER_X + TILE_SIZE - 1, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1, tile_ptr);
         }
         else if (fm == FLIP_VERTICAL)
         {
@@ -1021,7 +1021,7 @@ public:
             {
                 for (U8 x = 0; x < 8; x++)
                 {
-                    putpixel(FLIP_TILE_BUFFER_X + x, FLIP_TILE_BUFFER_Y + 8 - y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
+                    putpixel(FLIP_TILE_BUFFER_X + x, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1 - y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
                 }
             }
             getimage(FLIP_TILE_BUFFER_X, FLIP_TILE_BUFFER_Y, FLIP_TILE_BUFFER_X + TILE_SIZE - 1, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1, tile_ptr);
@@ -1032,7 +1032,7 @@ public:
             {
                 for (U8 x = 0; x < 8; x++)
                 {
-                    putpixel(FLIP_TILE_BUFFER_X + 8 - x, FLIP_TILE_BUFFER_Y + 8 - y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
+                    putpixel(FLIP_TILE_BUFFER_X + TILE_SIZE - 1 - x, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1 - y, getpixel(tile_src_x_beg + x, tile_src_y_beg + y));
                 }
             }
             getimage(FLIP_TILE_BUFFER_X, FLIP_TILE_BUFFER_Y, FLIP_TILE_BUFFER_X + TILE_SIZE - 1, FLIP_TILE_BUFFER_Y + TILE_SIZE - 1, tile_ptr);
@@ -1083,8 +1083,8 @@ public:
         int scx = memory[SCX];
 
 
-        int viewport_x_end = BG_X + scx + LCD_WIDTH - 1;
-        int viewport_y_end = BG_Y + scy + LCD_HEIGHT - 1;
+        int viewport_x_end = BG_X + scx + LCD_WIDTH;
+        int viewport_y_end = BG_Y + scy + LCD_HEIGHT;
         int wrap_x_width;
         int wrap_y_height;
 
@@ -1104,15 +1104,15 @@ public:
 
         if (viewport_x_end < BG_WIDTH)
         {
-            getimage(BG_X + scx, BG_Y + scy, viewport_x_end, viewport_y_end, viewport_buf_ptr);
+            getimage(BG_X + scx, BG_Y + scy, viewport_x_end - 1, viewport_y_end - 1, viewport_buf_ptr);
         }
         else
         {
-            getimage(BG_X + scx, BG_Y + scy, BG_WIDTH, viewport_y_end, viewport_buf_ptr);
+            getimage(BG_X + scx, BG_Y + scy, BG_WIDTH - 1, viewport_y_end - 1, viewport_buf_ptr);
         }
 
 
-        putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
+        putimage(VIEWPORT_X , VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
         //wrap part
         if (viewport_x_end > BG_WIDTH)
@@ -1120,7 +1120,7 @@ public:
             wrap_x_width = viewport_x_end - BG_WIDTH;
             viewport_x_end = BG_WIDTH;
 
-            getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end, viewport_buf_ptr);
+            getimage(BG_X, BG_Y + scy, BG_X + wrap_x_width - 1, viewport_y_end - 1, viewport_buf_ptr);
             putimage(VIEWPORT_X + LCD_WIDTH - wrap_x_width, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 #if (ENABLE_DEBUG_RECTANGLE == 1)
             rectangle(BG_X, BG_Y + scy, BG_X + wrap_x_width, viewport_y_end);
@@ -1128,7 +1128,8 @@ public:
         }
 
 
-        //getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
+		//LY == LYC workaround
+        getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
         getimage(BG_X, BG_Y, BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
@@ -1268,7 +1269,7 @@ public:
                     printREG();
                 }
 
-                ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
+                //ASSERT("0x28 should not be 0x00", memory[0x28] != 0x00);
 
 
                 switch (opcode)
