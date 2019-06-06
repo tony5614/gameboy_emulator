@@ -33,6 +33,7 @@ typedef unsigned short U16;
 #define TAC                    (0xFF07)   // timer control
 #define     TAC_START                  BIT(2) //timer start
 #define LCD_CTRL_REG           (0xFF40) //LCDC
+#define     OBJ_COMP_SEL           BIT(2)   //OBJ Block Composition Selection Flag
 #define     BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
 #define     BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
 #define     BG_WIN_ON_FALG         BIT(5)   //window on Flag
@@ -457,7 +458,7 @@ public:
     U8   scx_map[3];
     U8   fixed_ly;
     U8   page;  //two page 0 and 1
-    enum      filp_mode { FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL };
+    enum      filp_mode {FLIP_NONE, FLIP_HORIZONTAL, FLIP_VERTICAL, FLIP_HORIZONTAL_VERTICAL };
     DMGZ80CPU()
     {
         U8DATA::tile_dot_data_painter = &this->tile_dot_data_painter;
@@ -848,7 +849,7 @@ public:
     void update_lcd_y_coord()
     {
         //this mask controls frame rate
-        if ((cpu_cycles & 0x7F) == 0)
+        if ((cpu_cycles & 0x3F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
             memory[LY] = (U8)(memory[LY] + 1);
@@ -1056,20 +1057,59 @@ public:
             oam_entry_ptr = (OAM_ENTRY*)oam_entry_4_byte;
 
             //invalid, because memory is no primitive U8 array, is U8DATA instead
-            //oam_entry_ptr = (OAM_ENTRY*)(&memory[OAM + i * sizeof(OAM_ENTRY) + 3]);
+            //oam_entry_ptr = (OAM_ENTRY*)(&memory[OAM + i * sizeof(OAM_ENTRY) + 3]);			
 
-            getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
-            putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
+			//if it is 8x16 sprite
+			//memory[LCD_CTRL_REG] bit2 = 1
+			if (memory[LCD_CTRL_REG] & OBJ_COMP_SEL) 
+			{
+				//upside-down case
+				if ((oam_entry_ptr->flip_y_flip_x == FLIP_VERTICAL) || (oam_entry_ptr->flip_y_flip_x == FLIP_VERTICAL)) 
+				{
+					//tile 0
+					getTile(oam_entry_ptr->tile_no + 1, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
+					putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
+					//tile 1
+					getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
+					putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE, tile_buf_ptr, AND_PUT);
+				}
+				else 
+				{
+					//tile 0
+					getTile(oam_entry_ptr->tile_no + 1, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
+					putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE, tile_buf_ptr, AND_PUT);
+					//tile 1
+					getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
+					putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
+				}
+			}
+			//if it is 8x8 sprite
+			//memory[LCD_CTRL_REG] bit2 = 0
+			else
+			{
+				getTile(oam_entry_ptr->tile_no, tile_buf_ptr, oam_entry_ptr->flip_y_flip_x);
+				putimage(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, tile_buf_ptr, AND_PUT);
+			}
 
-#if            (ENABLE_DEBUG_RECTANGLE == 1)
-            rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
+
+#if (ENABLE_DEBUG_RECTANGLE == 1)
+			//memory[LCD_CTRL_REG] bit2 = 1
+			if ((memory[LCD_CTRL_REG] & OBJ_COMP_SEL))
+			{
+				rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + 2 * TILE_SIZE - 1);
+			}
+			//memory[LCD_CTRL_REG] bit2 = 0
+			else
+			{
+				rectangle(VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y, VIEWPORT_X + OAM_X_OFFSET + oam_entry_ptr->pos_x + TILE_SIZE - 1, VIEWPORT_Y + OAM_Y_OFFSET + oam_entry_ptr->pos_y + TILE_SIZE - 1);
+			}
 #endif
         }
     }
     void refreshLCD()
     {
 #if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
-        setvisualpage(page);
+		setactivepage(page);
 #endif
 
         //GetSystemTime(&end_time);
@@ -1148,7 +1188,7 @@ public:
 
 
 #if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
-        setactivepage(page);
+		setvisualpage(page);
         page = !page;
 #endif
     }
