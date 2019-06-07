@@ -37,7 +37,8 @@ typedef unsigned short U16;
 #define     BG_CODE_SEL_FALG       BIT(3)   //BG Code Area Selection Flag , tile index
 #define     BG_CHAR_SEL_FALG       BIT(4)   //BG char data Selection Flag , tile data
 #define     BG_WIN_ON_FALG         BIT(5)   //window on Flag
-#define     BG_WIN_VODE_FALG       BIT(6)   //window Code Area Selection Flag
+#define     BG_WIN_CODE_FLAG       BIT(6)   //window Code Area Selection Flag
+#define     LCD_ON_OFF_FLAG        BIT(7)   //LCD Controller Operation Stop Flag
 #define LCD_STAT               (0xFF41) //STAT
 #define     LCD_MATCH_FLAG         BIT(2)//LY == LYC
 #define     LCD_INT_H_BLNK         BIT(3)
@@ -50,6 +51,8 @@ typedef unsigned short U16;
 #define LYC                    (0xFF45) //LY compare
 #define DMA                    (0xFF46) //DMA
 #define BG_PALETTE_DATA        (0xFF47) //BGP
+#define WY                     (0xFF4A) //window_y
+#define WX                     (0xFF4B) //window_x
 #define INT_FLAGS              (0xFF0F)
 #define     INT_FLAG_VERT_BLANKING BIT(0)
 #define     INT_FLAG_LCDC          BIT(1)
@@ -65,6 +68,7 @@ typedef unsigned short U16;
 
 #define BG_CHAR_DATA_SIZE      (0x1000)
 #define BG_CODE_DATA_SIZE      (0x400)
+#define WIN_CODE_DATA_SIZE     (0x200)
 
 
 #define OAM_MEM_SIZE           (0xA0)
@@ -81,8 +85,12 @@ typedef unsigned short U16;
 #define LCD_HEIGHT             (144)
 #define BG_WIDTH               (256)
 #define BG_HEIGHT              (256)
+#define BG_X                   (0)
+#define BG_Y                   (0)
 #define VIEWPORT_X             (390)
 #define VIEWPORT_Y             (0)
+#define VIEWPORT_X_END         (VIEWPORT_X + LCD_WIDTH)
+#define VIEWPORT_Y_END         (VIEWPORT_Y + LCD_HEIGHT)
 #define TWO_PASS_RENDER_X      (0)
 #define TWO_PASS_RENDER_Y      (512)
 #define PAGE_NUM               (2)
@@ -94,8 +102,6 @@ typedef unsigned short U16;
 #define FLIP_TILE_BUFFER_X     (270)  
 #define FLIP_TILE_BUFFER_Y     (200)   
 
-#define BG_X                   (0)
-#define BG_Y                   (0)
 
 #define TILE_SIZE              (8)
 #define TILE_MEM_SIZE          (0x1800)
@@ -811,9 +817,9 @@ public:
         U16   bg_disp_data_addr = ((memory[LCD_CTRL_REG] & BG_CODE_SEL_FALG) ? 0x9C00 : 0x9800);
         U16   bg_tile_data_ofst = ((memory[LCD_CTRL_REG] & BG_CHAR_SEL_FALG) ? 0x8000 : 0x8800);
 
-        for (int y = 0; y < 256; y += 8)
+        for (int y = 0; y < 256; y += TILE_SIZE)
         {
-            for (int x = 0; x < 256; x += 8)
+            for (int x = 0; x < 256; x += TILE_SIZE)
             {
                 tile_no = memory[bg_disp_data_addr++];
 
@@ -849,7 +855,7 @@ public:
     void update_lcd_y_coord()
     {
         //this mask controls frame rate
-        if ((cpu_cycles & 0x3F) == 0)
+        if ((cpu_cycles & 0x7F) == 0)
         {
             //each horizontal line takes 512 cpu cycles
             memory[LY] = (U8)(memory[LY] + 1);
@@ -1041,6 +1047,39 @@ public:
 
 
     }
+	inline void updateWindow()
+	{
+		U16   win_code_addr = ((memory[LCD_CTRL_REG] & BG_WIN_CODE_FLAG) ? 0x9C00 : 0x9800);
+		U16   tile_no; //BG MAP , tile number, chr_code
+		U8    win_x = memory[WX] - TILE_SIZE - 1;
+		U8    win_y = memory[WY];
+
+
+
+		//if windows is on
+		if (memory[LCD_CTRL_REG] & BG_WIN_ON_FALG) 
+		{
+			//window size : 144 * 160
+			for (int y = 0; y < LCD_HEIGHT; y = y + TILE_SIZE)
+			{
+				for (int x = 0; x < LCD_WIDTH; x = x + TILE_SIZE)
+				{
+					//only render window over viewport_y_end, to save rendering resource
+					if (((VIEWPORT_Y + win_y + y) < VIEWPORT_Y_END) && ((VIEWPORT_X + win_x + x) < VIEWPORT_X_END))
+					{
+						tile_no = memory[win_code_addr++];
+						//win code data is from bg_tiles               
+						if (tile_no < 0x80)
+						{
+							tile_no = tile_no + 0x100;
+						}
+						getTile(tile_no, tile_buf_ptr);
+						putimage(VIEWPORT_X + win_x + x, VIEWPORT_Y + win_y + y, tile_buf_ptr, COPY_PUT);
+					}
+				}
+			}
+		}
+	}
     inline void updateOAM()
     {
         OAM_ENTRY *oam_entry_ptr;
@@ -1117,7 +1156,6 @@ public:
         //printf("s: %d , ms : %d\n", end_time.wSecond, end_time.wMilliseconds);
         buildBackground();
 
-
         //viewport
         int scy = memory[SCY];
         int scx = memory[SCX];
@@ -1167,10 +1205,8 @@ public:
 #endif
         }
 
-
 		//LY == LYC workaround
-        getimage(BG_X, BG_Y , BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
-        getimage(BG_X, BG_Y, BG_X + LCD_WIDTH, BG_Y + 0xF, viewport_buf_ptr);
+        getimage(BG_X, BG_Y, BG_X + LCD_WIDTH, BG_Y + this->fixed_ly, viewport_buf_ptr);
         putimage(VIEWPORT_X, VIEWPORT_Y, viewport_buf_ptr, COPY_PUT);
 
 #if (ENABLE_DEBUG_RECTANGLE == 1)
@@ -1185,6 +1221,10 @@ public:
 #endif
         //render sprite ,OAM
         updateOAM();
+
+		//render window , (overlay)
+		updateWindow();
+
 
 
 #if (ENABLE_DOUBLE_GRAPHIC_BUFFER == 1)
@@ -1263,7 +1303,7 @@ public:
 
             check_interrupt_and_dispatch_isr();
 
-            if ((this->refresh_lcd == TRUE))
+            if ((this->refresh_lcd == TRUE) && (memory[LCD_CTRL_REG] & LCD_ON_OFF_FLAG))
             {
                 refresh_lcd = FALSE;
                 refreshLCD();
