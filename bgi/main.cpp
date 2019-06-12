@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 	DMGZ80CPU cpu;
 	//setbkcolor(WHITE);
 	cleardevice();
-	cpu.readROM("mario.gb");
+	cpu.readROM("dist.gb");
 	cpu.run();
 	return 0;
 	
