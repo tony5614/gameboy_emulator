@@ -6,11 +6,11 @@ int main(int argc, char *argv[])
 {	
 	
 	
-	initwindow(560 * SCALE_SIZE, 256 * SCALE_SIZE, "gameboy_emulator", 20 ,400);
+	initwindow(560 * SCALE_SIZE, 256 * SCALE_SIZE, "gameboy_emulator", 20 ,700);
 	DMGZ80CPU cpu;
 	//setbkcolor(WHITE);
 	cleardevice();
-	cpu.readROM("mario.gb");
+	cpu.readROM("pokemonred.gb");
 	cpu.run();
 	return 0;
 	
